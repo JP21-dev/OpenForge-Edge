@@ -9,6 +9,7 @@ class SessionInfo(TypedDict, total=False):
     device_model: str
     current_step: str
     active_schematic: str
+    readings: list[dict]
 
 
 class RetrievedDoc(TypedDict):

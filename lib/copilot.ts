@@ -1,13 +1,15 @@
-import type { ChatMessage, CopilotSource } from "@/store/useRepairStore";
+import { readingStatus, type ChatMessage, type CopilotSource, type MeterReading } from "@/store/useRepairStore";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const MAX_HISTORY = 20;
+const MAX_READINGS = 10;
 
 interface CopilotContext {
   sessionId: string;
   deviceModel: string;
   currentStep?: string;
   schematic?: string;
+  readings: MeterReading[];
 }
 
 export interface CopilotReply {
@@ -46,6 +48,15 @@ export async function askCopilot(
         .filter((m) => m.role !== "system")
         .slice(-MAX_HISTORY)
         .map((m) => ({ role: m.role, content: m.content })),
+      readings: ctx.readings.slice(0, MAX_READINGS).map((r) => ({
+        test_point: r.testPoint,
+        mode: r.mode,
+        value: r.value,
+        unit: r.unit,
+        expected_min: r.expected?.min ?? null,
+        expected_max: r.expected?.max ?? null,
+        status: readingStatus(r),
+      })),
     },
   };
 

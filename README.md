@@ -20,12 +20,12 @@ Built to run entirely on local edge devices, OpenForge Edge removes the reliance
 *   **Zero-Trust Edge Inference:** Runs 100% offline using local LLMs, ensuring customer data privacy and eliminating cloud compute costs.
 *   **AMD Lemonade Ready:** Switch the whole AI stack (chat and embeddings) to Lemonade with `.env.lemonade.example` and a setup script. Runs on Ryzen AI NPU + iGPU (Hybrid) or Radeon GPUs; Ollama (`qwen2.5:7b`) remains available for other hardware.
 *   **Streaming Bench Chat:** Large, high-contrast chat built for use mid-repair. Answers stream in as they are generated, with live agent status ("Triaging issue…", "Searching schematics…") and cited manual excerpts.
-*   **Multimeter HUD & Diode Testing:** Logged readings flagged in/out of range against expected values for each test point.
+*   **Multimeter HUD & Diode Testing:** Log readings from any meter with large touch targets (test point, mode, value, optional expected range). Readings are flagged in/out of range and sent to the copilot, so you can ask "Is this reading bad?" or "What should I check next?".
 *   **Interactive Screw Maps:** Step-by-step teardown tracking to prevent hardware mix-ups during complex repairs.
 *   **Local RAG for Repair Manuals:** Ingest schematic PDFs, Markdown notes and JSON measurement files into ChromaDB with local `nomic-embed-text` embeddings. Answers cite the excerpts they used, and questions asking for a voltage, reading or resistance the knowledge base doesn't contain get "not in the knowledge base yet" instead of a guess.
 *   **Computer Vision Ingestion Pipeline** *(planned)*: OCR pipeline that processes XZZ schematic screenshots into structured JSON for the vector database.
 
-> **Current status:** the knowledge base ships with sourced PS5 notes (board revisions, known ICs, no-video and no-power diagnosis, original-PS5 teardown and screw map). Add your own schematics and boardview measurements to grow it. Live multimeter input is planned; the HUD's readings list is empty until then.
+> **Current status:** the knowledge base ships with sourced PS5 notes (board revisions, known ICs, no-video and no-power diagnosis, original-PS5 teardown and screw map). Add your own schematics and boardview measurements to grow it. Readings are logged by hand in the HUD; live USB/Bluetooth meter input is planned.
 
 ---
 

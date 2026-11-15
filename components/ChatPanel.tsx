@@ -52,6 +52,7 @@ export function ChatPanel() {
           sessionId: store.sessionId,
           deviceModel: store.deviceModel,
           currentStep: selectCurrentStep(store)?.title,
+          readings: store.readings,
           schematic: store.activeSchematic?.name,
         },
         {

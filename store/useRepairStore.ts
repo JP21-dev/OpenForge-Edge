@@ -46,6 +46,22 @@ export interface MeterReading {
   takenAt: number;
 }
 
+export const METER_UNITS: Record<MeterMode, string> = {
+  DCV: "V",
+  ACV: "V",
+  OHM: "Ω",
+  DIODE: "V",
+  CONT: "Ω",
+  AMP: "A",
+};
+
+export type ReadingStatus = "ok" | "fault" | "unknown";
+
+export function readingStatus(r: MeterReading): ReadingStatus {
+  if (r.value === null || !r.expected) return "unknown";
+  return r.value >= r.expected.min && r.value <= r.expected.max ? "ok" : "fault";
+}
+
 export interface ScrewSpec {
   id: string;
   position: string;
@@ -85,6 +101,7 @@ interface RepairState {
   toggleHud: () => void;
   setHudTab: (tab: HudTab) => void;
   addReading: (reading: Omit<MeterReading, "id" | "takenAt">) => void;
+  removeReading: (id: string) => void;
   toggleScrewRemoved: (id: string) => void;
 
   resetSession: () => void;
@@ -193,6 +210,7 @@ export const useRepairStore = create<RepairState>()(
         set((state) => ({
           readings: [{ ...reading, id: uid(), takenAt: Date.now() }, ...state.readings],
         })),
+      removeReading: (id) => set((state) => ({ readings: state.readings.filter((r) => r.id !== id) })),
       toggleScrewRemoved: (id) =>
         set((state) => ({
           screws: state.screws.map((s) => (s.id === id ? { ...s, removed: !s.removed } : s)),

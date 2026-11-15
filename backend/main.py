@@ -31,12 +31,23 @@ class HistoryMessage(BaseModel):
     content: str
 
 
+class LoggedReading(BaseModel):
+    test_point: str = Field(max_length=120)
+    mode: str = Field(max_length=10)
+    value: float | None = None
+    unit: str = Field(default="", max_length=5)
+    expected_min: float | None = None
+    expected_max: float | None = None
+    status: Literal["ok", "fault", "unknown"] = "unknown"
+
+
 class SessionState(BaseModel):
     session_id: str | None = None
     device_model: str | None = None
     current_step: str | None = None
     active_schematic: str | None = None
     history: list[HistoryMessage] = Field(default_factory=list, max_length=50)
+    readings: list[LoggedReading] = Field(default_factory=list, max_length=20)
 
 
 class ChatRequest(BaseModel):

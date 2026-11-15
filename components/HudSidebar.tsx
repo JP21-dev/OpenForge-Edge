@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
-import { Activity, CircleCheck, CircleDashed, Gauge, Cog, X } from "lucide-react";
-import { useRepairStore, type HudTab, type MeterReading } from "@/store/useRepairStore";
+import { useEffect, useState } from "react";
+import { Activity, CircleCheck, CircleDashed, Cog, Gauge, Plus, Trash2, X } from "lucide-react";
+import {
+  METER_UNITS,
+  readingStatus,
+  useRepairStore,
+  type HudTab,
+  type MeterMode,
+  type MeterReading,
+  type ReadingStatus,
+} from "@/store/useRepairStore";
 
 const TABS: { id: HudTab; label: string; icon: typeof Gauge }[] = [
   { id: "meter", label: "Multimeter", icon: Gauge },
@@ -85,64 +93,217 @@ export function HudSidebar() {
   );
 }
 
-type ReadingStatus = "ok" | "fault" | "unknown";
-
-function statusOf(r: MeterReading): ReadingStatus {
-  if (r.value === null || !r.expected) return "unknown";
-  return r.value >= r.expected.min && r.value <= r.expected.max ? "ok" : "fault";
-}
-
 const STATUS_STYLE: Record<ReadingStatus, { text: string; border: string; label: string }> = {
   ok: { text: "text-bench-ok", border: "border-bench-ok", label: "IN RANGE" },
   fault: { text: "text-bench-fault", border: "border-bench-fault", label: "OUT OF RANGE" },
   unknown: { text: "text-bench-muted", border: "border-bench-border", label: "NO REF" },
 };
 
+const MODES: MeterMode[] = ["DCV", "ACV", "OHM", "DIODE", "CONT", "AMP"];
+
 function MultimeterPanel() {
   const readings = useRepairStore((s) => s.readings);
-  const [live, ...history] = readings;
+  const removeReading = useRepairStore((s) => s.removeReading);
+  const [logging, setLogging] = useState(false);
+  const latest = readings[0];
+  const latestStatus = latest ? STATUS_STYLE[readingStatus(latest)] : STATUS_STYLE.unknown;
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border-2 border-bench-border bg-bench-bg p-5">
+      <div className={`rounded-2xl border-2 bg-bench-bg p-5 ${latest ? latestStatus.border : "border-bench-border"}`}>
         <div className="mb-2 flex items-center gap-2 text-lg font-semibold text-bench-muted">
           <Activity className="size-5 text-bench-accent" aria-hidden />
-          LIVE · <span className="font-mono">{live?.mode ?? "--"}</span>
-          <span className="ml-auto text-sm">meter not connected</span>
+          LATEST · <span className="font-mono">{latest?.mode ?? "--"}</span>
+          {latest && <span className={`ml-auto text-sm font-bold ${latestStatus.text}`}>{latestStatus.label}</span>}
         </div>
         <div className="font-mono text-7xl font-black tabular-nums leading-none tracking-tight">
-          {live?.value ?? "----"}
-          <span className="ml-2 text-4xl text-bench-muted">{live?.unit}</span>
+          {latest?.value ?? "----"}
+          <span className="ml-2 text-4xl text-bench-muted">{latest?.unit}</span>
         </div>
-        <div className="mt-2 truncate text-xl">{live?.testPoint ?? "Probe a test point"}</div>
+        <div className="mt-2 truncate text-xl">{latest?.testPoint ?? "Probe a test point, then log it"}</div>
       </div>
 
+      {logging ? (
+        <LogReadingForm onDone={() => setLogging(false)} />
+      ) : (
+        <button
+          onClick={() => setLogging(true)}
+          className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-bench-accent text-2xl font-black text-black"
+        >
+          <Plus className="size-8" aria-hidden />
+          Log reading
+        </button>
+      )}
+
       <h3 className="pt-2 text-lg font-bold uppercase tracking-wider text-bench-muted">Logged readings</h3>
-      {!live && <p className="text-lg text-bench-muted">No readings logged yet.</p>}
+      {!latest && <p className="text-lg text-bench-muted">No readings logged yet.</p>}
       <ul className="space-y-3">
-        {(live ? [live, ...history] : []).map((r) => {
-          const st = STATUS_STYLE[statusOf(r)];
+        {readings.map((r) => {
+          const st = STATUS_STYLE[readingStatus(r)];
           return (
-            <li key={r.id} className={`rounded-xl border-l-8 bg-bench-raised p-4 ${st.border}`}>
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="truncate text-xl font-semibold">{r.testPoint}</span>
-                <span className={`font-mono text-3xl font-bold tabular-nums ${st.text}`}>
-                  {r.value ?? "—"}
-                  <span className="ml-1 text-xl">{r.unit}</span>
-                </span>
+            <li key={r.id} className={`flex items-center gap-3 rounded-xl border-l-8 bg-bench-raised p-4 ${st.border}`}>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-xl font-semibold">{r.testPoint}</span>
+                  <span className={`font-mono text-3xl font-bold tabular-nums ${st.text}`}>
+                    {r.value ?? "—"}
+                    <span className="ml-1 text-xl">{r.unit}</span>
+                  </span>
+                </div>
+                <div className="mt-1 flex justify-between gap-2 font-mono text-base text-bench-muted">
+                  <span className="truncate">
+                    {r.mode}
+                    {r.expected && ` · ref ${r.expected.min}–${r.expected.max} ${r.unit}`}
+                  </span>
+                  <span className={`shrink-0 font-bold ${st.text}`}>{st.label}</span>
+                </div>
               </div>
-              <div className="mt-1 flex justify-between font-mono text-base text-bench-muted">
-                <span>
-                  {r.mode}
-                  {r.expected && ` · ref ${r.expected.min}–${r.expected.max} ${r.unit}`}
-                </span>
-                <span className={`font-bold ${st.text}`}>{st.label}</span>
-              </div>
+              <button
+                onClick={() => removeReading(r.id)}
+                aria-label={`Delete reading for ${r.testPoint}`}
+                className="grid size-12 shrink-0 place-items-center rounded-xl text-bench-muted hover:bg-bench-border hover:text-bench-fault"
+              >
+                <Trash2 className="size-6" />
+              </button>
             </li>
           );
         })}
       </ul>
     </div>
+  );
+}
+
+function parseNumber(text: string): number | null {
+  const n = Number.parseFloat(text.trim().replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function LogReadingForm({ onDone }: { onDone: () => void }) {
+  const readings = useRepairStore((s) => s.readings);
+  const addReading = useRepairStore((s) => s.addReading);
+  const [testPoint, setTestPoint] = useState("");
+  const [mode, setMode] = useState<MeterMode>(readings[0]?.mode ?? "DCV");
+  const [value, setValue] = useState("");
+  const [min, setMin] = useState("");
+  const [max, setMax] = useState("");
+
+  const recent = readings.filter((r, i) => readings.findIndex((x) => x.testPoint === r.testPoint) === i).slice(0, 6);
+  const parsedValue = parseNumber(value);
+  const canSave = testPoint.trim() !== "" && parsedValue !== null;
+  const unit = METER_UNITS[mode];
+
+  const pickRecent = (r: MeterReading) => {
+    setTestPoint(r.testPoint);
+    setMode(r.mode);
+    setMin(r.expected ? String(r.expected.min) : "");
+    setMax(r.expected ? String(r.expected.max) : "");
+  };
+
+  const save = () => {
+    if (!canSave) return;
+    const lo = parseNumber(min);
+    const hi = parseNumber(max);
+    addReading({
+      testPoint: testPoint.trim(),
+      mode,
+      value: parsedValue,
+      unit,
+      expected: lo !== null && hi !== null ? { min: Math.min(lo, hi), max: Math.max(lo, hi) } : undefined,
+    });
+    onDone();
+  };
+
+  const field =
+    "h-14 w-full rounded-xl border-2 border-bench-border bg-bench-bg px-4 text-xl placeholder:text-bench-muted focus:border-bench-accent focus:outline-none";
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+      className="space-y-4 rounded-2xl border-2 border-bench-accent bg-bench-raised p-4"
+      aria-label="Log a meter reading"
+    >
+      <label className="block space-y-2">
+        <span className="text-lg font-semibold text-bench-muted">Test point</span>
+        <input
+          autoFocus
+          value={testPoint}
+          onChange={(e) => setTestPoint(e.target.value)}
+          placeholder="e.g. 12V input, F7002, C5101"
+          className={field}
+        />
+      </label>
+
+      {recent.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {recent.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => pickRecent(r)}
+              className="rounded-full border-2 border-bench-border px-4 py-2 text-lg hover:border-bench-accent"
+            >
+              {r.testPoint}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Meter mode">
+        {MODES.map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={mode === m}
+            onClick={() => setMode(m)}
+            className={`h-14 rounded-xl font-mono text-lg font-bold ${
+              mode === m ? "bg-bench-accent text-black" : "bg-bench-bg text-bench-muted hover:text-bench-text"
+            }`}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+
+      <label className="block space-y-2">
+        <span className="text-lg font-semibold text-bench-muted">Reading</span>
+        <div className="flex items-center gap-3">
+          <input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            inputMode="decimal"
+            placeholder="0.000"
+            className={`${field} h-16 font-mono text-4xl font-bold tabular-nums`}
+          />
+          <span className="w-12 font-mono text-3xl text-bench-muted">{unit}</span>
+        </div>
+      </label>
+
+      <fieldset className="space-y-2">
+        <legend className="text-lg font-semibold text-bench-muted">Expected range (optional)</legend>
+        <div className="flex items-center gap-2">
+          <input value={min} onChange={(e) => setMin(e.target.value)} inputMode="decimal" placeholder="min" aria-label="Expected minimum" className={`${field} font-mono`} />
+          <span className="text-xl text-bench-muted">–</span>
+          <input value={max} onChange={(e) => setMax(e.target.value)} inputMode="decimal" placeholder="max" aria-label="Expected maximum" className={`${field} font-mono`} />
+        </div>
+      </fieldset>
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={!canSave}
+          className="h-14 flex-1 rounded-xl bg-bench-accent text-xl font-black text-black disabled:opacity-30"
+        >
+          Save
+        </button>
+        <button type="button" onClick={onDone} className="h-14 rounded-xl bg-bench-bg px-6 text-xl font-semibold text-bench-muted">
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

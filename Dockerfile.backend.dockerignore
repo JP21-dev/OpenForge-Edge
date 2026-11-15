@@ -1,0 +1,6 @@
+*
+!backend/
+backend/.venv
+backend/**/__pycache__
+backend/chroma_data
+backend/.env

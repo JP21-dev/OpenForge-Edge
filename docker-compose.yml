@@ -1,0 +1,89 @@
+name: openforge-edge
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: openforge-frontend
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [openforge-net]
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: openforge-backend
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:11434}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      LLM_KEEP_ALIVE: ${LLM_KEEP_ALIVE:-30m}
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      CHROMA_COLLECTION: ${CHROMA_COLLECTION:-repair_manuals}
+      MONGO_URI: mongodb://${MONGO_ROOT_USER:-openforge}:${MONGO_ROOT_PASSWORD:-change-me}@mongodb:27017/?authSource=admin
+      MONGO_DB: ${MONGO_DB:-openforge}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      chromadb:
+        condition: service_started
+      mongodb:
+        condition: service_healthy
+    networks: [openforge-net]
+    restart: unless-stopped
+
+  chromadb:
+    image: chromadb/chroma:${CHROMA_VERSION:-1.5.9}
+    container_name: chromadb
+    ports:
+      - "127.0.0.1:${CHROMA_HOST_PORT:-8001}:8000"
+    environment:
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chromadb_data:/data
+    networks: [openforge-net]
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:${MONGO_VERSION:-8.0}
+    container_name: mongodb
+    ports:
+      - "127.0.0.1:${MONGO_HOST_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-openforge}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change-me}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-openforge}
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [openforge-net]
+    restart: unless-stopped
+
+networks:
+  openforge-net:
+    name: openforge-net
+    driver: bridge
+
+volumes:
+  chromadb_data:
+    name: openforge_chromadb_data
+  mongodb_data:
+    name: openforge_mongodb_data

@@ -1,0 +1,11 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.7
+
+langgraph>=0.3
+langchain-core>=0.3
+langchain-ollama>=0.2
+langchain-openai>=0.2
+
+chromadb>=0.5
+pymongo>=4.8

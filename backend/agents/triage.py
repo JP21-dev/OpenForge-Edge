@@ -4,6 +4,7 @@ import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from knowledge import detect_device
 from llm import get_llm
 from state import AgentState
 
@@ -51,6 +52,8 @@ def triage_node(state: AgentState) -> dict:
     route = result.get("route")
     if route not in SPECIALISTS and route != DIRECT:
         route = "schematic_rag" if _RAG_HINTS.search(question) else DIRECT
+    if route == DIRECT and detect_device(session.get("device_model"), question):
+        route = "schematic_rag"
 
     return {
         "issue": str(result.get("issue") or question[:80]),

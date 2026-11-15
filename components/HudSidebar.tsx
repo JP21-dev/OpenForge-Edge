@@ -118,6 +118,7 @@ function MultimeterPanel() {
       </div>
 
       <h3 className="pt-2 text-lg font-bold uppercase tracking-wider text-bench-muted">Logged readings</h3>
+      {!live && <p className="text-lg text-bench-muted">No readings logged yet.</p>}
       <ul className="space-y-3">
         {(live ? [live, ...history] : []).map((r) => {
           const st = STATUS_STYLE[statusOf(r)];

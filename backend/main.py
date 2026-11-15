@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from pydantic import BaseModel, Field
 
+import knowledge
 from config import settings
 from graph import repair_graph
 
@@ -66,15 +67,6 @@ def _check(fn) -> str:
         return f"unreachable: {exc.__class__.__name__}"
 
 
-def _ping_chroma() -> None:
-    import chromadb
-
-    if settings.chroma_host:
-        chromadb.HttpClient(host=settings.chroma_host, port=settings.chroma_port).heartbeat()
-    else:
-        chromadb.PersistentClient(path=settings.chroma_path).heartbeat()
-
-
 def _ping_mongo() -> None:
     from pymongo import MongoClient
 
@@ -82,14 +74,27 @@ def _ping_mongo() -> None:
         client.admin.command("ping")
 
 
+def _knowledge_chunks() -> int | None:
+    try:
+        return knowledge.collection().count()
+    except Exception:
+        return None
+
+
 @app.get("/api/health")
 def health() -> dict:
+    chunks = _knowledge_chunks()
     return {
         "status": "ok",
         "model": settings.llm_model,
         "provider": settings.llm_provider,
         "llm_base_url": settings.llm_base_url,
-        "services": {"chromadb": _check(_ping_chroma), "mongodb": _check(_ping_mongo)},
+        "embed_model": settings.embed_model,
+        "knowledge_chunks": chunks,
+        "services": {
+            "chromadb": "ok" if chunks is not None else "unreachable",
+            "mongodb": _check(_ping_mongo),
+        },
     }
 
 
@@ -140,6 +145,8 @@ async def _stream_events(req: ChatRequest) -> AsyncIterator[str]:
         ):
             if mode == "messages":
                 chunk, meta = data
+                if "internal" in (meta.get("tags") or []):
+                    continue
                 if meta.get("langgraph_node") == "respond" and isinstance(chunk, AIMessageChunk):
                     if chunk.content:
                         yield _event({"type": "token", "text": chunk.content})

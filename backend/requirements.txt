@@ -6,6 +6,8 @@ langgraph>=0.3
 langchain-core>=0.3
 langchain-ollama>=0.2
 langchain-openai>=0.2
+ollama>=0.4
 
 chromadb>=0.5
 pymongo>=4.8
+pypdf>=4.0

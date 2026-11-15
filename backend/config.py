@@ -13,6 +13,14 @@ class Settings:
     llm_model: str = os.getenv("LLM_MODEL", "qwen2.5:7b")
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
     llm_keep_alive: str = os.getenv("LLM_KEEP_ALIVE", "30m")
+    llm_num_ctx: int = int(os.getenv("LLM_NUM_CTX", "8192"))
+
+    embed_base_url: str = os.getenv("EMBED_BASE_URL", "http://localhost:11434")
+    embed_model: str = os.getenv("EMBED_MODEL", "nomic-embed-text")
+
+    manuals_dir: str = os.getenv("MANUALS_DIR", "../data/manuals")
+    rag_top_k: int = int(os.getenv("RAG_TOP_K", "4"))
+    rag_min_score: float = float(os.getenv("RAG_MIN_SCORE", "0.6"))
 
     chroma_host: str | None = os.getenv("CHROMA_HOST") or None
     chroma_port: int = int(os.getenv("CHROMA_PORT", "8000"))

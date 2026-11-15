@@ -29,12 +29,20 @@ services:
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
       LLM_KEEP_ALIVE: ${LLM_KEEP_ALIVE:-30m}
+      LLM_NUM_CTX: ${LLM_NUM_CTX:-8192}
+      EMBED_BASE_URL: ${EMBED_BASE_URL:-http://host.docker.internal:11434}
+      EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+      MANUALS_DIR: /app/manuals
+      RAG_TOP_K: ${RAG_TOP_K:-4}
+      RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.6}
       CHROMA_HOST: chromadb
       CHROMA_PORT: 8000
       CHROMA_COLLECTION: ${CHROMA_COLLECTION:-repair_manuals}
       MONGO_URI: mongodb://${MONGO_ROOT_USER:-openforge}:${MONGO_ROOT_PASSWORD:-change-me}@mongodb:27017/?authSource=admin
       MONGO_DB: ${MONGO_DB:-openforge}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    volumes:
+      - ./data/manuals:/app/manuals:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

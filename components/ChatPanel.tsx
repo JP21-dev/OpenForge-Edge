@@ -183,7 +183,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
                     {s.source}
                     {s.page != null && ` p.${s.page}`}
                   </span>
-                  <span className="block text-bench-muted">{s.text}</span>
+                  <span className="line-clamp-3 text-bench-muted" title={s.text}>
+                    {s.text}
+                  </span>
                 </span>
               </li>
             ))}

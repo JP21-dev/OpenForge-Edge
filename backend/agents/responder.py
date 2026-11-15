@@ -1,12 +1,40 @@
-from langchain_core.messages import AIMessage, SystemMessage
+import json
+import logging
+import re
+
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from llm import get_llm
 from state import AgentState
 
+log = logging.getLogger(__name__)
+
+VALUE_QUESTION = re.compile(
+    r"\b(voltage|volts?|reading|resistance|ohms?|diode|current draw|expected value|what should .+ (read|be|measure))\b",
+    re.IGNORECASE,
+)
+
+NOT_COVERED = (
+    "That value isn't in the knowledge base yet.\n"
+    "1. Compare against a known-good board or your boardview.\n"
+    "2. Once you have a trusted value, add it to data/manuals so the copilot can use it."
+)
+
+COVERAGE_CHECK = """Reference excerpts:
+{context}
+
+Question: {question}
+
+Does any excerpt explicitly state the requested value for exactly the same rail, pin, chip or part that the question names? A value for a different rail or part does not count.
+Reply with only a JSON object: {{"covered": true}} or {{"covered": false}}"""
+
 SYSTEM = """You are OpenForge Edge, an offline copilot for electronics repair technicians.
 The technician's hands are busy: answer in short, numbered, actionable steps and lead with the single next action.
-Flag safety hazards (high voltage, lithium cells, ESD) first.
-Only cite values that appear in the reference excerpts; if none apply, say so instead of guessing.
+The reference excerpts are ordered by relevance. Answer the technician's exact symptom or question from the excerpt that matches it most closely, and ignore excerpts about other faults.
+Only state part numbers, designators, values, screw counts or tool sizes that appear in the excerpts. If the excerpts do not cover the question, say it is not in the knowledge base yet instead of guessing.
+A value for one rail, pin or part never answers a question about a different rail, pin or part.
+Example: the excerpts give the 5 V USB rail, and the technician asks for the memory rail voltage. Correct answer: "The memory rail voltage isn't in the knowledge base yet. 1. Compare against a known-good board or your boardview." Wrong answer: "5 V".
+Mention a safety hazard only when one specifically applies (for example liquid metal, mains power inside the power supply, or BGA rework).
 
 Device: {device}
 Current diagnostic step: {step}
@@ -26,13 +54,35 @@ def _format_context(docs: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _value_covered(question: str, context: str) -> bool:
+    try:
+        raw = get_llm(json_mode=True).with_config(tags=["internal"]).invoke(
+            [HumanMessage(COVERAGE_CHECK.format(context=context, question=question))]
+        )
+        match = re.search(r"\{.*\}", raw.content, re.DOTALL)
+        return bool(json.loads(match.group(0)).get("covered", True)) if match else True
+    except Exception as exc:
+        log.warning("Coverage check failed, answering anyway: %s", exc)
+        return True
+
+
 def respond_node(state: AgentState) -> dict:
     session = state.get("session", {})
+    question = state["messages"][-1].content
+    context = _format_context(state.get("context", []))
+
+    if VALUE_QUESTION.search(question) and not _value_covered(question, context):
+        return {
+            "messages": [AIMessage(NOT_COVERED)],
+            "reply": NOT_COVERED,
+            "trace": ["respond:not_covered"],
+        }
+
     system = SYSTEM.format(
         device=session.get("device_model") or "unknown",
         step=session.get("current_step") or "none",
         issue=state.get("issue", "unknown"),
-        context=_format_context(state.get("context", [])),
+        context=context,
     )
     answer = get_llm().invoke([SystemMessage(system), *state["messages"]])
     return {

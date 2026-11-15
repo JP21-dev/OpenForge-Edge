@@ -25,5 +25,6 @@ def get_llm(json_mode: bool = False) -> BaseChatModel:
         model=settings.llm_model,
         temperature=settings.llm_temperature,
         keep_alive=settings.llm_keep_alive,
+        num_ctx=settings.llm_num_ctx,
         format="json" if json_mode else None,
     )

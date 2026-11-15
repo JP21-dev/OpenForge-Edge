@@ -95,32 +95,36 @@ const uid = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
-const PLACEHOLDER_STEPS: DiagnosticStep[] = [
-  { id: "s1", title: "Visual inspection", detail: "Check for burnt components, corrosion, lifted pads.", status: "active" },
-  { id: "s2", title: "Measure main rail (PP_VDD_MAIN)", detail: "Expect 3.7–4.2 V with battery connected.", status: "pending" },
-  { id: "s3", title: "Diode mode on charge IC", detail: "Compare against known-good values.", status: "pending" },
-  { id: "s4", title: "Thermal check under load", status: "pending" },
+const PS5_STEPS: DiagnosticStep[] = [
+  { id: "s1", title: "Visual inspection", detail: "HDMI port, burnt parts, liquid metal outside the APU barrier.", status: "active" },
+  { id: "s2", title: "Confirm 12 V from the power supply", status: "pending" },
+  { id: "s3", title: "Check 5 V and southbridge voltages", status: "pending" },
+  { id: "s4", title: "Check fuses and shorts to ground", status: "pending" },
+  { id: "s5", title: "Read UART error codes", status: "pending" },
 ];
 
-const PLACEHOLDER_READINGS: MeterReading[] = [
-  { id: "r1", testPoint: "PP_VDD_MAIN", mode: "DCV", value: 3.98, unit: "V", expected: { min: 3.7, max: 4.2 }, takenAt: 0 },
-  { id: "r2", testPoint: "PP3V3_S2", mode: "DCV", value: 2.41, unit: "V", expected: { min: 3.2, max: 3.4 }, takenAt: 0 },
-  { id: "r3", testPoint: "C4210 → GND", mode: "OHM", value: 0.6, unit: "Ω", expected: { min: 50, max: 100000 }, takenAt: 0 },
-  { id: "r4", testPoint: "U3300 pin 4", mode: "DIODE", value: null, unit: "V", takenAt: 0 },
-];
-
-const PLACEHOLDER_SCREWS: ScrewSpec[] = [
-  { id: "sc1", position: "Bottom edge (pentalobe)", length: "3.4 mm", head: "P2", count: 2, removed: false },
-  { id: "sc2", position: "Battery bracket", length: "1.2 mm", head: "Y000", count: 3, removed: false },
-  { id: "sc3", position: "Display shield", length: "1.3 mm", head: "PH000", count: 4, removed: false },
-  { id: "sc4", position: "Logic board standoff", length: "2.5 mm", head: "Standoff", count: 1, removed: false },
+const PS5_SCREWS: ScrewSpec[] = [
+  { id: "sc1", position: "Stand", length: "26.5 mm", head: "Coin / flathead", count: 1, removed: false },
+  { id: "sc2", position: "Fan shroud", length: "23.3 mm", head: "TR9", count: 2, removed: false },
+  { id: "sc3", position: "Fan shroud", length: "11.4 mm", head: "TR9", count: 1, removed: false },
+  { id: "sc4", position: "Fan shroud", length: "31 mm", head: "TR9", count: 1, removed: false },
+  { id: "sc5", position: "SSD cover", length: "17 mm", head: "Phillips", count: 1, removed: false },
+  { id: "sc6", position: "Case", length: "18.6 mm", head: "TR8", count: 6, removed: false },
+  { id: "sc7", position: "Case", length: "23.3 mm", head: "TR8", count: 2, removed: false },
+  { id: "sc8", position: "Case", length: "43.2 mm", head: "TR8", count: 2, removed: false },
+  { id: "sc9", position: "Case", length: "7.3 mm", head: "TR8", count: 1, removed: false },
+  { id: "sc10", position: "Top shield plate", length: "7.3 mm", head: "TR8", count: 41, removed: false },
+  { id: "sc11", position: "Top shield plate", length: "43.2 mm", head: "TR8", count: 1, removed: false },
+  { id: "sc12", position: "Main board (SSD)", length: "11 mm", head: "Phillips", count: 1, removed: false },
+  { id: "sc13", position: "APU tension bracket", length: "11.8 mm", head: "Phillips", count: 2, removed: false },
+  { id: "sc14", position: "Main board", length: "7.3 mm", head: "TR8", count: 2, removed: false },
 ];
 
 const initialSession = () => ({
   sessionId: uid(),
-  deviceModel: "Unassigned device",
+  deviceModel: "PlayStation 5",
   activeSchematic: null as Schematic | null,
-  diagnosticSteps: PLACEHOLDER_STEPS,
+  diagnosticSteps: PS5_STEPS,
   currentStepIndex: 0,
   messages: [
     {
@@ -131,8 +135,8 @@ const initialSession = () => ({
     },
   ],
   isCopilotThinking: false,
-  readings: PLACEHOLDER_READINGS,
-  screws: PLACEHOLDER_SCREWS,
+  readings: [] as MeterReading[],
+  screws: PS5_SCREWS,
 });
 
 export const useRepairStore = create<RepairState>()(
@@ -197,7 +201,7 @@ export const useRepairStore = create<RepairState>()(
       resetSession: () => set(initialSession()),
     }),
     {
-      name: "openforge-repair-session",
+      name: "openforge-repair-session-v2",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       partialize: ({ isCopilotThinking: _thinking, ...rest }) => rest,

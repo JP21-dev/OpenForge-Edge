@@ -21,8 +21,9 @@ SPECIALISTS: dict[str, Specialist] = {
             name="schematic_rag",
             node=schematic_rag_node,
             description=(
-                "Look up board schematics, boardview data, test points, expected voltages "
-                "or diode-mode values, and component locations in the repair manuals."
+                "Look up the repair manuals and notes: schematics, boardview data, test points, "
+                "expected voltages or diode-mode values, IC and component locations, fault "
+                "diagnosis procedures, error codes, beep codes, teardown steps and screw sizes."
             ),
         ),
     ]

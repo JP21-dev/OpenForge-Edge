@@ -16,3 +16,6 @@ backend/chroma_data/
 .claude/
 .DS_Store
 Thumbs.db
+
+data/manuals/**/*.pdf
+data/manuals/**/private/

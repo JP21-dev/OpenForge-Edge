@@ -18,10 +18,10 @@ Built to run entirely on local edge devices, OpenForge Edge removes the reliance
 *   **Streaming Bench Chat:** Large, high-contrast chat built for use mid-repair. Answers stream in as they are generated, with live agent status ("Triaging issue…", "Searching schematics…") and cited manual excerpts.
 *   **Multimeter HUD & Diode Testing:** Logged readings flagged in/out of range against expected values for each test point.
 *   **Interactive Screw Maps:** Step-by-step teardown tracking to prevent hardware mix-ups during complex repairs.
-*   **Local RAG for Repair Manuals:** Semantic search across repair guides, schematics, and datasheets powered by ChromaDB.
+*   **Local RAG for Repair Manuals:** Ingest schematic PDFs, Markdown notes and JSON measurement files into ChromaDB with local `nomic-embed-text` embeddings. Answers cite the excerpts they used, and questions asking for a voltage, reading or resistance the knowledge base doesn't contain get "not in the knowledge base yet" instead of a guess.
 *   **Computer Vision Ingestion Pipeline** *(planned)*: OCR pipeline that processes XZZ schematic screenshots into structured JSON for the vector database.
 
-> **Current status:** the schematic RAG agent searches built-in sample excerpts, and the HUD shows sample readings. Manual ingestion into ChromaDB and live meter input are in progress.
+> **Current status:** the knowledge base ships with sourced PS5 notes (board revisions, known ICs, no-video and no-power diagnosis, original-PS5 teardown and screw map). Add your own schematics and boardview measurements to grow it. Live multimeter input is planned; the HUD's readings list is empty until then.
 
 ---
 
@@ -63,8 +63,11 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 │   ├── main.py             FastAPI app and endpoints
 │   ├── graph.py            LangGraph wiring
 │   ├── agents/             triage, schematic_rag, responder + registry
+│   ├── knowledge.py        Embeddings, device detection, ChromaDB search
+│   ├── ingest.py           Loads data/manuals into ChromaDB
 │   ├── llm.py, config.py, state.py
 │   └── requirements.txt
+├── data/manuals/<device>/  Knowledge base source files (e.g. ps5/)
 ├── Dockerfile.frontend
 ├── Dockerfile.backend
 ├── docker-compose.yml
@@ -79,7 +82,8 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 *   Windows 11 with WSL2 enabled (or a native Linux environment)
 *   [Docker Desktop](https://www.docker.com/products/docker-desktop/) with Docker Compose (WSL2 backend on Windows)
 *   [Ollama](https://ollama.com/download) installed on the host (or AMD Lemonade, see [Using AMD Lemonade](#using-amd-lemonade))
-*   ~8 GB free disk space (model + Docker images); 16 GB RAM recommended for 7B models
+*   ~8 GB free disk space (models + Docker images); 16 GB RAM recommended for 7B models
+*   A GPU with 6 GB+ VRAM is strongly recommended (developed on an RTX 2060 6 GB: answers start streaming in a few seconds). CPU-only laptops work but are several times slower.
 *   For local development only: Node.js 20+ and Python 3.11+
 
 ### 1. Clone the repository
@@ -88,10 +92,13 @@ git clone https://github.com/JP21-dev/OpenForge-Edge.git
 cd OpenForge-Edge
 ```
 
-### 2. Install the local model
-Start Ollama, then pull the default model (~4.7 GB):
+### 2. Install the local models
+Start Ollama, then pull the chat model (~4.7 GB) and the embedding model (~274 MB):
 ```bash
 ollama pull qwen2.5:7b
+```
+```bash
+ollama pull nomic-embed-text
 ```
 Check that Ollama is serving it:
 ```bash
@@ -129,15 +136,22 @@ The first build takes several minutes (the backend installs ChromaDB and LangCha
 
 All ports bind to `127.0.0.1`, so the databases are never exposed to the shop network.
 
-### 5. Verify everything is connected
+### 5. Load the knowledge base
+Embed everything in `data/manuals/` into ChromaDB (takes a few seconds for the bundled PS5 notes):
+```bash
+docker compose exec backend python ingest.py
+```
+Run it again whenever you add or edit files. Use `--reset` to rebuild the collection from scratch. See [Knowledge Base](#-knowledge-base) for supported formats.
+
+### 6. Verify everything is connected
 ```bash
 curl http://localhost:8000/api/health
 ```
 A healthy stack returns:
 ```json
-{"status":"ok","model":"qwen2.5:7b","provider":"ollama","llm_base_url":"http://host.docker.internal:11434","services":{"chromadb":"ok","mongodb":"ok"}}
+{"status":"ok","model":"qwen2.5:7b","provider":"ollama","llm_base_url":"http://host.docker.internal:11434","embed_model":"nomic-embed-text","knowledge_chunks":14,"services":{"chromadb":"ok","mongodb":"ok"}}
 ```
-Then open http://localhost:3000 and ask the copilot something, e.g. *"Phone won't charge, where do I start?"*
+`knowledge_chunks` should be above 0. Then open http://localhost:3000 and ask the copilot something, e.g. *"PS5 beeps 3 times when I plug it in"*.
 
 > **Before a demo:** send one question first. The model loads into RAM on its first request, and `LLM_KEEP_ALIVE` (default `30m`) keeps it there between questions.
 
@@ -154,6 +168,52 @@ After pulling new code, rebuild:
 ```bash
 docker compose up -d --build
 ```
+
+---
+
+## 📚 Knowledge Base
+
+Source files live in `data/manuals/`, one subfolder per device family. The folder name becomes the `device` tag used to filter searches:
+```
+data/manuals/
+└── ps5/
+    ├── overview.md
+    ├── no-power.md
+    ├── no-video-hdmi.md
+    ├── teardown-liquid-metal.md
+    └── EDM-020-service-manual.pdf    (your own files)
+```
+The backend container mounts this folder read-only at `/app/manuals`.
+
+**Supported formats**
+*   **Markdown / text (`.md`, `.txt`):** split by `#`/`##`/`###` headings into chunks. Optional front matter adds metadata:
+    ```
+    ---
+    title: PS5 no video / no HDMI signal
+    device: ps5
+    board: EDM-020
+    type: procedure
+    reliability: verified on bench
+    url: https://example.com/source
+    ---
+    ```
+*   **PDF (`.pdf`):** text is extracted page by page; answers cite the page number. Scanned PDFs without a text layer have nothing to extract (OCR is planned).
+*   **JSON measurements (`.json`):** one chunk per entry, ideal for boardview readings from a known-good board:
+    ```json
+    {
+      "title": "EDM-020 known-good readings",
+      "board": "EDM-020",
+      "entries": [
+        { "name": "<rail or test point>", "kind": "voltage", "value": "<measured value>", "location": "<designator>", "notes": "measured on known-good board" }
+      ]
+    }
+    ```
+
+**Device detection:** a question is searched within a device's documents when the session's device name or the question mentions it (for PS5: "PS5", "PlayStation 5", "CFI-1…", "EDM-0…"). Add aliases for new devices in `DEVICE_ALIASES` in `backend/knowledge.py`.
+
+**Private files:** PDFs under `data/manuals/` and any `data/manuals/**/private/` folder are git-ignored so proprietary schematics are never pushed. Markdown and JSON files are committed; keep only content you are allowed to share in them.
+
+**Accuracy:** only add values you trust (service manuals, boardview, measurements from known-good boards). The copilot will repeat whatever is in the knowledge base.
 
 ---
 
@@ -203,6 +263,10 @@ All settings live in `.env` (read by Docker Compose) or as environment variables
 | `LLM_MODEL` | `qwen2.5:7b` | Model name on the LLM server |
 | `LLM_TEMPERATURE` | `0.2` | Sampling temperature |
 | `LLM_KEEP_ALIVE` | `30m` | How long Ollama keeps the model loaded between requests |
+| `LLM_NUM_CTX` | `8192` | Context window, room for manual excerpts plus chat history |
+| `EMBED_BASE_URL` / `EMBED_MODEL` | `http://host.docker.internal:11434` / `nomic-embed-text` | Ollama server and model used for embeddings (also when chatting through Lemonade) |
+| `RAG_TOP_K` | `4` | Maximum excerpts retrieved per question |
+| `RAG_MIN_SCORE` | `0.6` | Minimum similarity (0–1) for an excerpt to be used; raise it if answers pull in unrelated sections |
 | `CHROMA_VERSION` / `CHROMA_COLLECTION` | `1.5.9` / `repair_manuals` | ChromaDB image tag and collection name |
 | `MONGO_VERSION`, `MONGO_ROOT_USER`, `MONGO_ROOT_PASSWORD`, `MONGO_DB` | `8.0`, `openforge`, `change-me`, `openforge` | MongoDB image and credentials |
 
@@ -277,6 +341,9 @@ Agents are registered in `backend/agents/__init__.py`. Nothing in `graph.py` nee
 | Backend can't reach Ollama under native Docker in WSL2 | Make Ollama listen on all interfaces: set `OLLAMA_HOST=0.0.0.0` on the host and restart Ollama |
 | CORS errors in the browser console | Add the UI's origin to `CORS_ORIGINS` and restart the backend |
 | Port already in use | Change the matching `*_PORT` variable in `.env` |
+| `knowledge_chunks` is `0` or answers never show sources | Run `docker compose exec backend python ingest.py` |
+| Ingest fails with a model error | Pull the embedding model on the host: `ollama pull nomic-embed-text` |
+| Answers say "not in the knowledge base yet" | The value isn't in `data/manuals/`. Add a trusted source and re-run ingest |
 | Old chat history after a restart | Use the reset button in the Bench UI header (history is stored in the browser) |
 
 ---

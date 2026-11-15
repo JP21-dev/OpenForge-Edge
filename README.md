@@ -74,17 +74,17 @@ graph TD
             Mongo[(MongoDB - Repair Docs)]
             Chroma[(ChromaDB - Vector Embeddings)]
         end
-    end
+        end
 
-    subgraph Ingestion [Data Ingestion Pipeline]
+        subgraph Ingestion [Data Ingestion Pipeline]
         XZZ[XZZ Schematic Screenshots]
-    end
+        end
 
-    %% Connections
-    Next <-->|JSON Requests| API
-    LG <-->|LLM Inference & Tool Calls| AI_Engine
-    LG <-->|Semantic Search| Chroma
-    LG <-->|CRUD Operations| Mongo
+        %% Connections
+        Next <-->|JSON Requests| API
+        LG <-->|LLM Inference & Tool Calls| AI_Engine
+        LG <-->|Semantic Search| Chroma
+        LG <-->|CRUD Operations| Mongo
     
-    XZZ -->|Upload| Vision
-    Vision -.->|Generate Structured JSON| API
+        XZZ -->|Upload| Vision
+        Vision -.->|Generate Structured JSON| API

@@ -49,42 +49,40 @@ OpenForge Edge utilizes a decoupled, containerized architecture optimized for lo
 *   Docker Desktop & Docker Compose
 *   Node.js 20+
 *   Python 3.11+
-graph TD
-    subgraph Local_Edge [Offline Edge Environment - Docker / WSL2]
-        
-        subgraph Frontend [The Bench UI]
-            Next[Next.js + Tailwind CSS]
-            Zustand[Zustand State Management]
-            Next <--> Zustand
-        end
 
-        subgraph Backend [Multi-Agent Routing]
-            API[FastAPI / Uvicorn Server]
-            LG[LangGraph Agent Orchestrator]
-            API <-->|Tasks & State| LG
-        end
+### Installation
 
-        subgraph AI_Engine [AMD Lemonade Inference Engine]
-            Llama[Llama 3.2:3B - Reasoning]
-            Vision[Vision Model - Schematics OCR]
-            Embed[nomic-embed-text - RAG]
-        end
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/JP21-dev/openforge-edge.git
+   cd openforge-edge
+   ```
 
-        subgraph Data_Layer [Local Data Stores]
-            Mongo[(MongoDB - Repair Docs)]
-            Chroma[(ChromaDB - Vector Embeddings)]
-        end
-        end
+2. **Configure Environment Variables:**
+   Copy the example environment file and configure your local ports to avoid collisions (default ChromaDB on 8001, FastAPI on 8000).
+   ```bash
+   cp .env.example .env
+   ```
+   *(Note: Ensure all proprietary service manuals or specific enterprise network configs are sanitized from your `.env` before running)*.
 
-        subgraph Ingestion [Data Ingestion Pipeline]
-        XZZ[XZZ Schematic Screenshots]
-        end
+3. **Launch the Containerized Stack:**
+   ```bash
+   docker compose up -d
+   ```
 
-        %% Connections
-        Next <-->|JSON Requests| API
-        LG <-->|LLM Inference & Tool Calls| AI_Engine
-        LG <-->|Semantic Search| Chroma
-        LG <-->|CRUD Operations| Mongo
-    
-        XZZ -->|Upload| Vision
-        Vision -.->|Generate Structured JSON| API
+4. **Start the Frontend:**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+---
+
+## 🤝 Contributing
+OpenForge Edge is built for the community. Whether you are adding new schematic OCR parsers, optimizing the LangGraph prompts for specific device triages, or improving the Next.js UI, contributions are welcome. Please check our `CONTRIBUTING.md` for guidelines.
+
+## 📄 License
+This project is licensed under the MIT License - see the `LICENSE` file for details. 
+
+*Developed by Lapis Forge.*

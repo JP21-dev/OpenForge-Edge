@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from config import settings
-from knowledge import collection, embed_documents, reset_collection
+from knowledge import EmbeddingMismatch, check_embedding, collection, embed_documents, embedding_id, reset_collection
 
 CHUNK_CHARS = 1200
 BATCH = 32
@@ -133,9 +133,14 @@ def main() -> int:
     if args.reset:
         reset_collection()
         print("Collection reset.")
+    try:
+        check_embedding(collection())
+    except EmbeddingMismatch as exc:
+        print(exc, file=sys.stderr)
+        return 1
 
     files = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED)
-    print(f"Ingesting {len(files)} files from {root} into '{settings.chroma_collection}'")
+    print(f"Ingesting {len(files)} files from {root} into '{settings.chroma_collection}' with {embedding_id()}")
     total = sum(ingest_file(p, root) for p in files)
     print(f"Done: {total} chunks, collection now holds {collection().count()}.")
     return 0

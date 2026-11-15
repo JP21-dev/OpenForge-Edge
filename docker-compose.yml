@@ -30,8 +30,13 @@ services:
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
       LLM_KEEP_ALIVE: ${LLM_KEEP_ALIVE:-30m}
       LLM_NUM_CTX: ${LLM_NUM_CTX:-8192}
+      LLM_API_KEY: ${LLM_API_KEY:-lemonade}
+      LLM_JSON_MODE: ${LLM_JSON_MODE:-true}
+      LLM_ENABLE_THINKING: ${LLM_ENABLE_THINKING:-false}
+      EMBED_PROVIDER: ${EMBED_PROVIDER:-ollama}
       EMBED_BASE_URL: ${EMBED_BASE_URL:-http://host.docker.internal:11434}
       EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
+      EMBED_API_KEY: ${EMBED_API_KEY:-lemonade}
       MANUALS_DIR: /app/manuals
       RAG_TOP_K: ${RAG_TOP_K:-4}
       RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.6}

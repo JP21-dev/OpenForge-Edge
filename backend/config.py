@@ -2,8 +2,15 @@ import os
 from dataclasses import dataclass, field
 
 
+OPENAI_COMPATIBLE = ("lemonade", "openai")
+
+
 def _csv(value: str) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
+
+
+def _flag(value: str) -> bool:
+    return value.strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass(frozen=True)
@@ -14,9 +21,14 @@ class Settings:
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
     llm_keep_alive: str = os.getenv("LLM_KEEP_ALIVE", "30m")
     llm_num_ctx: int = int(os.getenv("LLM_NUM_CTX", "8192"))
+    llm_api_key: str = os.getenv("LLM_API_KEY", "lemonade")
+    llm_json_mode: bool = _flag(os.getenv("LLM_JSON_MODE", "true"))
+    llm_enable_thinking: bool = _flag(os.getenv("LLM_ENABLE_THINKING", "false"))
 
+    embed_provider: str = os.getenv("EMBED_PROVIDER", "ollama")
     embed_base_url: str = os.getenv("EMBED_BASE_URL", "http://localhost:11434")
     embed_model: str = os.getenv("EMBED_MODEL", "nomic-embed-text")
+    embed_api_key: str = os.getenv("EMBED_API_KEY", "lemonade")
 
     manuals_dir: str = os.getenv("MANUALS_DIR", "../data/manuals")
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "4"))

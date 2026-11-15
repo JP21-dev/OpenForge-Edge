@@ -5,16 +5,20 @@
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-orange)](https://langchain-ai.github.io/langgraph/)
+[![AMD Lemonade](https://img.shields.io/badge/AMD-Lemonade%20Ready-ED1C24)](https://lemonade-server.ai)
 
 OpenForge Edge (formerly Forge Assist) is a zero-trust, offline-first multimodal AI copilot designed for hardware repair technicians, micro-soldering specialists, and the Right-to-Repair community.
 
 Built to run entirely on local edge devices, OpenForge Edge removes the reliance on expensive cloud API tokens and ensures absolute customer data privacy at the repair bench. By leveraging multi-agent routing and local RAG, it provides technicians with interactive board diagnostics, real-time multimeter HUDs, and guided training workflows without ever sending proprietary schematics or customer details to the cloud.
 
+**Built for AMD Lemonade.** OpenForge Edge runs on [AMD Lemonade](https://lemonade-server.ai), AMD's local AI server, with one configuration file: chat, triage and manual embeddings all run through Lemonade's OpenAI-compatible API. On Ryzen AI 300-series laptops the copilot runs on the NPU and integrated GPU together (Hybrid models); on Radeon GPUs it runs through llama.cpp with Vulkan or ROCm. Ollama is supported as an alternative engine for non-AMD machines. See [AMD Lemonade Integration](#-amd-lemonade-integration).
+
 ---
 
 ## 🚀 Key Features
 
-*   **Zero-Trust Edge Inference:** Runs 100% offline using local LLMs (default `qwen2.5:7b` via Ollama, or AMD Lemonade), ensuring customer data privacy and eliminating cloud compute costs.
+*   **Zero-Trust Edge Inference:** Runs 100% offline using local LLMs, ensuring customer data privacy and eliminating cloud compute costs.
+*   **AMD Lemonade Ready:** Switch the whole AI stack (chat and embeddings) to Lemonade with `.env.lemonade.example` and a setup script. Runs on Ryzen AI NPU + iGPU (Hybrid) or Radeon GPUs; Ollama (`qwen2.5:7b`) remains available for other hardware.
 *   **Streaming Bench Chat:** Large, high-contrast chat built for use mid-repair. Answers stream in as they are generated, with live agent status ("Triaging issue…", "Searching schematics…") and cited manual excerpts.
 *   **Multimeter HUD & Diode Testing:** Logged readings flagged in/out of range against expected values for each test point.
 *   **Interactive Screw Maps:** Step-by-step teardown tracking to prevent hardware mix-ups during complex repairs.
@@ -47,7 +51,7 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 ### Backend (Multi-Agent Routing)
 *   **API:** FastAPI (running via Uvicorn)
 *   **Agent Framework:** LangGraph. A `TriageAgent` identifies the issue and routes to specialist agents (currently `SchematicRAGAgent`), then a responder writes the final answer.
-*   **Local AI Engine:** Ollama (`ChatOllama`) or any OpenAI-compatible server such as AMD Lemonade
+*   **Local AI Engine:** AMD Lemonade (`LLM_PROVIDER=lemonade`, via the OpenAI-compatible API) or Ollama (`ChatOllama`). Embeddings use the same engine (`EMBED_PROVIDER`).
 
 ### Data Layer
 *   **Document Store:** MongoDB 8
@@ -68,10 +72,14 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 │   ├── llm.py, config.py, state.py
 │   └── requirements.txt
 ├── data/manuals/<device>/  Knowledge base source files (e.g. ps5/)
+├── scripts/
+│   ├── setup-lemonade.ps1  Lemonade setup for Windows
+│   └── setup-lemonade.sh   Lemonade setup for Linux
 ├── Dockerfile.frontend
 ├── Dockerfile.backend
 ├── docker-compose.yml
-└── .env.example
+├── .env.example            Ollama configuration (default)
+└── .env.lemonade.example   AMD Lemonade configuration
 ```
 
 ---
@@ -81,7 +89,7 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 ### Prerequisites
 *   Windows 11 with WSL2 enabled (or a native Linux environment)
 *   [Docker Desktop](https://www.docker.com/products/docker-desktop/) with Docker Compose (WSL2 backend on Windows)
-*   [Ollama](https://ollama.com/download) installed on the host (or AMD Lemonade, see [Using AMD Lemonade](#using-amd-lemonade))
+*   A local AI engine on the host: [AMD Lemonade](https://lemonade-server.ai) (see [AMD Lemonade Integration](#-amd-lemonade-integration)) or [Ollama](https://ollama.com/download). The steps below use Ollama; the Lemonade section replaces steps 2 and 3.
 *   ~8 GB free disk space (models + Docker images); 16 GB RAM recommended for 7B models
 *   A GPU with 6 GB+ VRAM is strongly recommended (developed on an RTX 2060 6 GB: answers start streaming in a few seconds). CPU-only laptops work but are several times slower.
 *   For local development only: Node.js 20+ and Python 3.11+
@@ -258,13 +266,18 @@ All settings live in `.env` (read by Docker Compose) or as environment variables
 | `CHROMA_HOST_PORT` / `MONGO_HOST_PORT` | `8001` / `27017` | Host ports for the databases |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend URL used by the browser. Built into the frontend, so rebuild after changing it |
 | `CORS_ORIGINS` | `http://localhost:3000,…` | Origins allowed to call the API |
-| `LLM_PROVIDER` | `ollama` | `ollama` or `openai` (OpenAI-compatible servers such as Lemonade) |
-| `LLM_BASE_URL` | `http://host.docker.internal:11434` | LLM server address, as seen from the backend container |
-| `LLM_MODEL` | `qwen2.5:7b` | Model name on the LLM server |
+| `LLM_PROVIDER` | `ollama` | `lemonade`, `ollama`, or `openai` (any other OpenAI-compatible server) |
+| `LLM_BASE_URL` | `http://host.docker.internal:11434` | LLM server address, as seen from the backend container. Lemonade: `http://host.docker.internal:13305/api/v1` |
+| `LLM_MODEL` | `qwen2.5:7b` | Model name on the LLM server (e.g. `Qwen2.5-7B-Instruct-Hybrid` on Lemonade) |
 | `LLM_TEMPERATURE` | `0.2` | Sampling temperature |
-| `LLM_KEEP_ALIVE` | `30m` | How long Ollama keeps the model loaded between requests |
-| `LLM_NUM_CTX` | `8192` | Context window, room for manual excerpts plus chat history |
-| `EMBED_BASE_URL` / `EMBED_MODEL` | `http://host.docker.internal:11434` / `nomic-embed-text` | Ollama server and model used for embeddings (also when chatting through Lemonade) |
+| `LLM_API_KEY` | `lemonade` | Sent to OpenAI-compatible servers; set it to your `LEMONADE_API_KEY` if you enabled one |
+| `LLM_JSON_MODE` | `true` | Request JSON output for triage; set `false` if the server rejects `response_format` |
+| `LLM_ENABLE_THINKING` | `false` | Lemonade only: allow reasoning models (Qwen3) to think before answering. Slower |
+| `LLM_KEEP_ALIVE` | `30m` | Ollama only: how long the model stays loaded between requests |
+| `LLM_NUM_CTX` | `8192` | Ollama only: context window. Lemonade sizes the context itself (`lemonade config set ctx_size=…`) |
+| `EMBED_PROVIDER` | `ollama` | `lemonade`, `ollama` or `openai`. Changing it requires `python ingest.py --reset` |
+| `EMBED_BASE_URL` / `EMBED_MODEL` | `http://host.docker.internal:11434` / `nomic-embed-text` | Embedding server and model. Lemonade: `…:13305/api/v1` / `nomic-embed-text-v1-GGUF` |
+| `EMBED_API_KEY` | `lemonade` | API key for an OpenAI-compatible embedding server |
 | `RAG_TOP_K` | `4` | Maximum excerpts retrieved per question |
 | `RAG_MIN_SCORE` | `0.6` | Minimum similarity (0–1) for an excerpt to be used; raise it if answers pull in unrelated sections |
 | `CHROMA_VERSION` / `CHROMA_COLLECTION` | `1.5.9` / `repair_manuals` | ChromaDB image tag and collection name |
@@ -272,18 +285,89 @@ All settings live in `.env` (read by Docker Compose) or as environment variables
 
 After changing backend settings, restart it with `docker compose up -d backend`. After changing `NEXT_PUBLIC_API_URL`, rebuild the frontend with `docker compose up -d --build frontend`.
 
-### Using AMD Lemonade
-Lemonade serves an OpenAI-compatible API, by default on port **8000**, which clashes with the backend. In `.env`:
+---
+
+## 🍋 AMD Lemonade Integration
+
+[Lemonade](https://lemonade-server.ai) is AMD's open-source local AI server. It serves LLMs and embedding models through an OpenAI-compatible API and is optimized for Ryzen AI NPUs, Radeon GPUs and Strix Halo. OpenForge Edge ships ready to run on it: no code changes, just configuration.
+
+### Why Lemonade for the repair bench
+*   **Runs on the NPU:** Ryzen AI 300-series laptops can run the copilot on the NPU and iGPU together (Hybrid models), leaving the CPU free for boardview software and keeping a bench laptop cool and quiet.
+*   **Radeon acceleration:** On desktop Radeon GPUs, Lemonade's llama.cpp backend uses Vulkan or ROCm.
+*   **One server for chat and embeddings:** triage, answers and the manuals knowledge base all use the same local server.
+*   **Still fully offline:** after the models are downloaded, nothing leaves the machine.
+
+### Choosing a model
+
+| Hardware | Chat model (`LLM_MODEL`) | Notes |
+|---|---|---|
+| Ryzen AI 300 series, Windows | `Qwen2.5-7B-Instruct-Hybrid` | NPU + iGPU. Default in `.env.lemonade.example` |
+| Ryzen AI 300 series, NPU only | `Qwen2.5-7B-Instruct-NPU` | Lowest power draw |
+| Radeon GPU (Vulkan / ROCm) | `Qwen3-8B-GGUF` | Keep `LLM_ENABLE_THINKING=false` for fast answers |
+| Smaller GPU or CPU only | `Qwen3-4B-Instruct-2507-GGUF` | ~2.5 GB |
+
+Embeddings use `nomic-embed-text-v1-GGUF` on all hardware. Run `lemonade list` to see every model Lemonade offers and `lemonade backends` to see what your machine supports.
+
+### Setup
+
+**1. Install Lemonade** from [lemonade-server.ai](https://lemonade-server.ai) (Windows installer, or packages for Ubuntu, Debian, Fedora, Arch and Snap) and start it. Check it is serving:
+```bash
+curl http://localhost:13305/api/v1/models
 ```
-BACKEND_PORT=8080
-NEXT_PUBLIC_API_URL=http://localhost:8080
-LLM_PROVIDER=openai
-LLM_BASE_URL=http://host.docker.internal:8000/api/v1
-LLM_MODEL=<model name loaded in Lemonade>
+
+**2. Run the setup script** from the repository root. It copies `.env.lemonade.example` to `.env` (if you don't already have one), pulls the chat and embedding models with `lemonade pull`, and checks the server.
+
+Windows (PowerShell):
+```powershell
+.\scripts\setup-lemonade.ps1
 ```
-Then rebuild:
+Linux:
+```bash
+./scripts/setup-lemonade.sh
+```
+
+To set up by hand instead: copy `.env.lemonade.example` to `.env`, pick `LLM_MODEL` from the table above, and run `lemonade pull <model>` for the chat model and `nomic-embed-text-v1-GGUF`.
+
+**3. Start the stack and build the knowledge base** with Lemonade embeddings:
 ```bash
 docker compose up -d --build
+```
+```bash
+docker compose exec backend python ingest.py --reset
+```
+
+**4. Verify:**
+```bash
+curl http://localhost:8000/api/health
+```
+Expect `"provider":"lemonade"`, `"embedding":"lemonade:nomic-embed-text-v1-GGUF"` and `knowledge_built_with` showing the same value.
+
+### How the integration works
+*   **Chat and triage:** with `LLM_PROVIDER=lemonade`, `backend/llm.py` uses LangChain's `ChatOpenAI` client pointed at `LLM_BASE_URL` (Lemonade's `/api/v1`). Streaming answers in the Bench UI come straight from Lemonade's streamed chat completions.
+*   **Reasoning models:** Qwen3 models think before answering by default. The backend sends `enable_thinking: false` (Lemonade's request option) unless `LLM_ENABLE_THINKING=true`, so answers start streaming immediately.
+*   **JSON triage:** triage asks for a JSON route decision. Lemonade's `response_format` support depends on the backend, so `.env.lemonade.example` sets `LLM_JSON_MODE=false` and relies on the prompt instead; the backend falls back to keyword routing if a reply isn't valid JSON.
+*   **Embeddings:** with `EMBED_PROVIDER=lemonade`, `backend/knowledge.py` calls Lemonade's `/api/v1/embeddings` through the OpenAI client. The `search_document:` / `search_query:` prefixes that nomic models expect are added automatically.
+*   **Embedding safety check:** the knowledge base records which provider and model built it. If you switch between Ollama and Lemonade without re-ingesting, ingest refuses to mix them and searches return no excerpts, with a log message telling you to run `python ingest.py --reset`.
+
+### Docker networking
+The backend container reaches Lemonade on the host at `host.docker.internal:13305`.
+*   **Docker Desktop (Windows/macOS):** works with Lemonade's default `localhost` binding.
+*   **Native Docker on Linux or inside WSL2:** the container comes from the Docker bridge, so make Lemonade listen on all interfaces and protect it with a key:
+    ```bash
+    lemonade config set host=0.0.0.0
+    ```
+    Set `LEMONADE_API_KEY` in Lemonade's environment, and put the same value in `LLM_API_KEY` and `EMBED_API_KEY` in `.env`.
+
+### Older Lemonade releases
+Older Lemonade versions listen on port **8000**, which clashes with the OpenForge backend. Either upgrade Lemonade, or keep it and move the backend: set `BACKEND_PORT=8080` and `NEXT_PUBLIC_API_URL=http://localhost:8080`, and change `13305` to `8000` in `LLM_BASE_URL` and `EMBED_BASE_URL`. Then rebuild with `docker compose up -d --build`.
+
+### Switching back to Ollama
+Copy `.env.example` to `.env` (or set `LLM_PROVIDER=ollama` and `EMBED_PROVIDER=ollama` with their URLs and models), then restart and re-ingest:
+```bash
+docker compose up -d backend
+```
+```bash
+docker compose exec backend python ingest.py --reset
 ```
 
 ---
@@ -335,7 +419,11 @@ Agents are registered in `backend/agents/__init__.py`. Nothing in `graph.py` nee
 | Symptom | Fix |
 |---|---|
 | Chat shows *"model '…' not found"* | Pull the model on the host: `ollama pull <LLM_MODEL>` |
-| Chat shows *"Local model unavailable at …"* | Start Ollama/Lemonade on the host and check `LLM_BASE_URL` |
+| Chat shows *"Local model unavailable at …"* | Start Lemonade/Ollama on the host and check `LLM_BASE_URL` |
+| Lemonade returns a 404 or "model not found" | Pull it with `lemonade pull <LLM_MODEL>` and check the exact name with `lemonade list` |
+| Lemonade errors mentioning `response_format` | Set `LLM_JSON_MODE=false` and restart the backend |
+| Answers stop citing sources after switching engines | Embedding mismatch: run `docker compose exec backend python ingest.py --reset` |
+| Backend can't reach Lemonade under native Docker in WSL2/Linux | `lemonade config set host=0.0.0.0` and set a `LEMONADE_API_KEY` (see [Docker networking](#docker-networking)) |
 | Chat shows *"Backend unreachable"* | Check `docker compose ps`; the backend must be `healthy` |
 | First answer is very slow | The model is loading into RAM; later answers are faster while `LLM_KEEP_ALIVE` holds it |
 | Backend can't reach Ollama under native Docker in WSL2 | Make Ollama listen on all interfaces: set `OLLAMA_HOST=0.0.0.0` on the host and restart Ollama |

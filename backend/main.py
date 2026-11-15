@@ -74,23 +74,25 @@ def _ping_mongo() -> None:
         client.admin.command("ping")
 
 
-def _knowledge_chunks() -> int | None:
+def _knowledge() -> tuple[int | None, str | None]:
     try:
-        return knowledge.collection().count()
+        col = knowledge.collection()
+        return col.count(), (col.metadata or {}).get("embedding")
     except Exception:
-        return None
+        return None, None
 
 
 @app.get("/api/health")
 def health() -> dict:
-    chunks = _knowledge_chunks()
+    chunks, built_with = _knowledge()
     return {
         "status": "ok",
         "model": settings.llm_model,
         "provider": settings.llm_provider,
         "llm_base_url": settings.llm_base_url,
-        "embed_model": settings.embed_model,
+        "embedding": knowledge.embedding_id(),
         "knowledge_chunks": chunks,
+        "knowledge_built_with": built_with,
         "services": {
             "chromadb": "ok" if chunks is not None else "unreachable",
             "mongodb": _check(_ping_mongo),

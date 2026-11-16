@@ -36,4 +36,9 @@ def get_llm(json_mode: bool = False) -> BaseChatModel:
         keep_alive=settings.llm_keep_alive,
         num_ctx=settings.llm_num_ctx,
         format="json" if json_mode and settings.llm_json_mode else None,
+        reasoning=settings.llm_enable_thinking if _can_think(settings.llm_model) else None,
     )
+
+
+def _can_think(model: str) -> bool:
+    return model.lower().startswith(("qwen3:", "qwen3-", "deepseek-r1"))

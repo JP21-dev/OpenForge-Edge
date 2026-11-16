@@ -28,55 +28,54 @@ export function SessionHeader() {
   const [failing, setFailing] = useState(false);
 
   return (
-    <header className="flex shrink-0 flex-wrap items-center gap-3 border-b-2 border-bench-border bg-bench-panel px-4 py-3 md:gap-4 md:px-6">
-      <div className="flex min-w-0 items-center gap-2">
-        <Cpu className="size-8 shrink-0 text-bench-accent" aria-hidden />
-        <DevicePicker />
-        <BoardRevisionPicker />
+    <header className="shrink-0 border-b-2 border-bench-border bg-bench-panel">
+      <div className="flex h-[4.5rem] items-center gap-2 px-3 md:gap-3 md:px-6">
+        <Cpu className="hidden size-8 shrink-0 text-bench-accent sm:block" aria-hidden />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <DevicePicker />
+          <BoardRevisionPicker />
+        </div>
+        <RecordingPill />
+        <ModeToggle />
+        <IconButton label={hudOpen ? "Hide HUD" : "Show HUD"} onClick={toggleHud}>
+          {hudOpen ? <PanelRightClose className="size-7" /> : <PanelRightOpen className="size-7" />}
+        </IconButton>
       </div>
 
-      {appMode === "repair" ? (
-        <div className="order-last flex min-w-0 basis-full items-center gap-3 md:order-none md:flex-1 md:basis-auto">
-          <ProcedurePicker />
-          <span className="shrink-0 rounded-md bg-bench-accent px-3 py-1 font-mono text-lg font-black text-black">
-            STEP {stepIndex + 1}/{steps.length}
-          </span>
-          <span className="min-w-0 truncate text-xl font-semibold">{currentStep?.title ?? "No active step"}</span>
-          <div className="ml-auto flex shrink-0 gap-2">
+      <div className="flex h-[4.5rem] items-center gap-2 border-t border-bench-border/60 px-3 md:gap-3 md:px-6">
+        {appMode === "repair" ? (
+          <>
+            <ProcedurePicker />
+            <span className="shrink-0 rounded-md bg-bench-accent px-2 py-1 font-mono text-base font-black text-black md:px-3 md:text-lg">
+              <span className="hidden sm:inline">STEP </span>
+              {stepIndex + 1}/{steps.length}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-lg font-semibold md:text-xl" title={currentStep?.title}>
+              {currentStep?.title ?? "No active step"}
+            </span>
+            <span className="hidden max-w-64 shrink items-center gap-2 truncate text-lg text-bench-muted 2xl:flex">
+              <FileText className="size-6 shrink-0" aria-hidden />
+              <span className="truncate">{schematic ? schematic.name : "No schematic open"}</span>
+            </span>
             <IconButton label="Mark step passed" onClick={() => completeCurrentStep("done")} tone="ok">
               <Check className="size-7" />
             </IconButton>
             <IconButton label="Step failed: suggest next steps" onClick={() => setFailing(true)} tone="fault">
               <X className="size-7" />
             </IconButton>
-          </div>
-        </div>
-      ) : (
-        <div className="order-last basis-full text-xl font-semibold text-bench-muted md:order-none md:flex-1 md:basis-auto">
-          Ingest mode · upload schematics and photos
-        </div>
-      )}
-
-      <div className="ml-auto flex items-center gap-2 md:ml-0">
-        <RecordingPill />
-        <ModeToggle />
-        {appMode === "repair" && (
-          <>
-            <span className="hidden items-center gap-2 text-lg text-bench-muted 2xl:flex">
-              <FileText className="size-6" aria-hidden />
-              {schematic ? schematic.name : "No schematic open"}
+            <span className="mx-1 hidden h-10 w-px bg-bench-border sm:block" aria-hidden />
+            <span className="hidden sm:contents">
+              <IconButton label="Finish repair and save to history" onClick={() => setFinishing(true)} tone="ok">
+                <Flag className="size-7" />
+              </IconButton>
+              <IconButton label="Reset session without saving" onClick={() => confirm("Start a new repair session without saving?") && resetSession()}>
+                <RotateCcw className="size-7" />
+              </IconButton>
             </span>
-            <IconButton label="Finish repair and save to history" onClick={() => setFinishing(true)} tone="ok">
-              <Flag className="size-7" />
-            </IconButton>
-            <IconButton label="Reset session without saving" onClick={() => confirm("Start a new repair session without saving?") && resetSession()}>
-              <RotateCcw className="size-7" />
-            </IconButton>
           </>
+        ) : (
+          <span className="truncate text-lg font-semibold text-bench-muted md:text-xl">Ingest mode · upload schematics and photos</span>
         )}
-        <IconButton label={hudOpen ? "Hide HUD" : "Show HUD"} onClick={toggleHud}>
-          {hudOpen ? <PanelRightClose className="size-7" /> : <PanelRightOpen className="size-7" />}
-        </IconButton>
       </div>
 
       {finishing && (
@@ -146,12 +145,17 @@ function BoardRevisionPicker() {
     <button
       onClick={start}
       title="Board revision: answers and schematics are filtered to it"
-      className={`flex h-12 shrink-0 items-center gap-2 rounded-lg border-2 px-3 font-mono text-lg font-bold ${
+      aria-label={boardRevision ? `Board revision ${boardRevision}` : "Set board revision"}
+      className={`flex h-12 shrink-0 items-center gap-2 rounded-lg border-2 px-2 font-mono text-lg font-bold sm:px-3 ${
         boardRevision ? "border-bench-accent text-bench-accent" : "border-dashed border-bench-border text-bench-muted"
       }`}
     >
       <CircuitBoard className="size-5" aria-hidden />
-      {boardRevision || "Set board"}
+      {boardRevision ? (
+        <span className="max-w-24 truncate sm:max-w-none">{boardRevision}</span>
+      ) : (
+        <span className="hidden sm:inline">Set board</span>
+      )}
     </button>
   );
 }

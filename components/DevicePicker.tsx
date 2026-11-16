@@ -49,7 +49,7 @@ export function DevicePicker() {
         aria-haspopup="menu"
         aria-expanded={open}
         title="Switch device"
-        className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-2xl font-bold tracking-tight hover:bg-bench-raised disabled:opacity-50"
+        className="flex min-w-0 max-w-full items-center gap-1 rounded-lg px-1 py-1 text-xl font-bold tracking-tight hover:bg-bench-raised disabled:opacity-50 sm:gap-2 sm:px-2 sm:text-2xl"
       >
         <span className="truncate">{deviceModel}</span>
         <ChevronDown className="size-6 shrink-0 text-bench-muted" aria-hidden />
@@ -119,7 +119,7 @@ export function ProcedurePicker() {
         className="flex h-11 items-center gap-2 rounded-lg border-2 border-bench-border px-3 text-lg font-semibold hover:border-bench-accent"
       >
         <Wrench className="size-5 text-bench-accent" aria-hidden />
-        <span className="max-w-56 truncate">{procedure.title}</span>
+        <span className="hidden max-w-40 truncate md:inline xl:max-w-56">{procedure.title}</span>
         <ChevronDown className="size-5 text-bench-muted" aria-hidden />
       </button>
       {open && (

@@ -8,15 +8,28 @@ from config import OPENAI_COMPATIBLE, settings
 
 DEVICE_ALIASES: dict[str, list[str]] = {
     "ps5": ["ps5", "playstation 5", "playstation5", "cfi-1", "cfi-2", "edm-0"],
-    "xbox-series-x": ["xbox series x", "series x", "xsx", "project scarlett"],
+    "ps4": ["ps4", "playstation 4", "playstation4", "cuh-1", "cuh-2", "cuh-7"],
+    "xbox-series-x": ["xbox series x", "series x", "xsx", "project scarlett", "model 1882"],
+    "xbox-series-s": ["xbox series s", "series s", "xss", "model 1883"],
+    "xbox-one": ["xbox one"],
+    "switch-2": ["nintendo switch 2", "switch 2"],
+    "switch": ["nintendo switch", "switch oled", "switch lite", "hac-001", "heg-001", "hdh-001"],
+    "ipad": ["ipad"],
+    "iphone": ["iphone"],
+    "android-tablet": ["galaxy tab", "android tablet", "lenovo tab", "pixel tablet"],
+    "pixel": ["google pixel", "pixel phone", "pixel 6", "pixel 7", "pixel 8", "pixel 9", "pixel 10"],
+    "galaxy-s": ["samsung galaxy s", "galaxy s2", "galaxy s1", "sm-s9"],
+    "macbook": ["macbook"],
+    "windows-laptop": ["windows laptop", "thinkpad", "dell xps", "latitude", "hp elitebook", "hp pavilion", "zenbook", "ideapad", "surface laptop"],
 }
 
 
 def detect_device(*texts: str | None) -> str | None:
-    haystack = " ".join(t for t in texts if t).lower()
-    for device, aliases in DEVICE_ALIASES.items():
-        if any(alias in haystack for alias in aliases):
-            return device
+    for text in texts:
+        haystack = (text or "").lower()
+        for device, aliases in DEVICE_ALIASES.items():
+            if any(alias in haystack for alias in aliases):
+                return device
     return None
 
 

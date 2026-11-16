@@ -62,9 +62,14 @@ export interface Procedure {
   steps: ProcedureStep[];
 }
 
+export type DeviceGroup = "Consoles" | "Phones" | "Tablets" | "Laptops";
+
 export interface DeviceProfile {
   id: string;
   name: string;
+  group?: DeviceGroup;
+  starter?: boolean;
+  ifixit?: string;
   revisions: string[];
   sources: { label: string; url: string }[];
   views: Record<string, DeviceView>;
@@ -104,6 +109,8 @@ const PS5_SHIELD = [...perimeter(30, 15, 11, 70, 138), ...grid(3, 4, 25, 30, 50,
 const PS5: DeviceProfile = {
   id: "ps5",
   name: "PlayStation 5",
+  group: "Consoles",
+  ifixit: "PlayStation 5",
   revisions: ["EDM-010", "EDM-020", "EDM-031", "EDM-033"],
   sources: [
     { label: "iFixit: PlayStation 5 Teardown", url: "https://www.ifixit.com/Teardown/PlayStation+5+Teardown/138280" },
@@ -274,6 +281,8 @@ PS5.procedures = [
 const XSX: DeviceProfile = {
   id: "xbox-series-x",
   name: "Xbox Series X",
+  group: "Consoles",
+  ifixit: "Xbox Series X",
   revisions: [],
   sources: [
     { label: "iFixit: Xbox Series X Teardown", url: "https://www.ifixit.com/Teardown/Xbox+Series+X+Teardown/138451" },
@@ -428,6 +437,201 @@ XSX.procedures = [
   },
 ];
 
+const OPEN_FAIL: StepSuggestion[] = [
+  { title: "Apply more heat and work slowly", detail: "Re-warm the adhesive and use more opening picks instead of more force; slide picks rather than prying." },
+  { title: "Check for a hidden screw or clip", detail: "Look under labels, rubber feet and stickers before forcing a panel." },
+  { title: "Check flex cables before lifting further", detail: "Some panels have a cable attached; open only far enough to disconnect it." },
+];
+
+const PORT_FAIL: StepSuggestion[] = [
+  { title: "Clean the port", detail: "Remove lint with a non-conductive pick, then isopropyl alcohol; inspect pins under magnification." },
+  { title: "Try a known-good cable and charger", detail: "Rules out the accessory before replacing the port." },
+  { title: "Measure VBUS at the port", detail: "No VBUS with a good charger points to the port or its flex; VBUS present but no charging points to the charging circuit." },
+];
+
+function mobileProcedures(battery: boolean): Procedure[] {
+  return [
+    {
+      id: "no-power",
+      title: "No power / no boot diagnosis",
+      summary: "Generic checks from the charger inwards.",
+      steps: [
+        { id: "inspect", title: "Visual inspection", detail: "Liquid indicators, corrosion, a swollen battery, bent frame or cracked board.", onFail: INSPECT_FAIL },
+        { id: "port", title: "Check the charging port and cable", detail: "Lint, bent pins; try a known-good cable and charger.", onFail: PORT_FAIL },
+        {
+          id: "usb-meter",
+          title: "Measure charging current with a USB meter",
+          detail: "No current at all points to the port, its flex or the charging circuit. A fixed draw with no boot can mean a short or a boot fault.",
+          onFail: [
+            { title: "Check VBUS at the port", detail: "Confirms whether power reaches the board." },
+            { title: "Check the main battery rail for a short to ground", detail: "Battery disconnected, diode or resistance mode." },
+          ],
+        },
+        ...(battery
+          ? [
+              {
+                id: "battery-v",
+                title: "Check the battery voltage",
+                detail: "Measure at the battery connector. A deeply discharged, swollen or damaged battery should be replaced, not charged.",
+                onFail: [
+                  { title: "Try a known-good battery", detail: "Rules out the cell and its protection circuit." },
+                  { title: "Boot from a bench power supply", detail: "Feed battery voltage through the battery connector with current limiting and watch the draw while pressing power." },
+                ],
+              },
+            ]
+          : []),
+        { id: "shorts", title: "Check the main battery rail for a short to ground", detail: "Battery disconnected.", onFail: SHORT_FAIL },
+        { id: "dc-boot", title: "Boot from a current-limited bench supply", detail: "Watch the current draw pattern when pressing power; compare against a known-good unit." },
+      ],
+    },
+    {
+      id: "battery",
+      title: "Battery replacement",
+      summary: "Open, disconnect, swap and test the battery.",
+      steps: [
+        { id: "open", title: "Open the device", detail: "Heat to soften adhesive or remove the case screws, depending on the model.", onFail: OPEN_FAIL },
+        { id: "disconnect", title: "Disconnect the battery", detail: "Before touching any other connector." },
+        { id: "remove-battery", title: "Remove the old battery", detail: "Use the adhesive pull tabs or isopropyl alcohol under the cell. Never bend or puncture a Li-ion cell." },
+        { id: "fit-battery", title: "Fit the new battery and test", detail: "Reconnect, check it charges and reports a sensible voltage before closing up." },
+      ],
+    },
+    {
+      id: "charging",
+      title: "Charging port fault",
+      summary: "Not charging, loose cable, intermittent charging.",
+      steps: [
+        { id: "port-clean", title: "Inspect and clean the port", onFail: PORT_FAIL },
+        { id: "port-test", title: "Test with a known-good cable and charger" },
+        { id: "port-vbus", title: "Measure VBUS and charge current", detail: "USB meter between charger and device." },
+        { id: "port-replace", title: "Replace the port or charging flex", detail: "If the port is soldered to the main board, this is a micro-soldering job." },
+      ],
+    },
+  ];
+}
+
+function laptopProcedures(): Procedure[] {
+  return [
+    {
+      id: "no-power",
+      title: "No power diagnosis",
+      summary: "Generic checks from the adapter inwards.",
+      steps: [
+        { id: "inspect", title: "Visual inspection", detail: "Liquid damage, burnt parts, a swollen battery, damaged DC jack or USB-C port.", onFail: INSPECT_FAIL },
+        {
+          id: "adapter",
+          title: "Check the adapter output",
+          detail: "Measure the adapter, or use a USB-C PD meter to confirm it negotiates 20 V.",
+          onFail: [
+            { title: "Try a known-good adapter", detail: "Match the voltage and wattage of the original." },
+            { title: "Check the cable and plug", detail: "Wiggle-test for intermittent output." },
+          ],
+        },
+        { id: "input", title: "Check power at the DC jack or USB-C port", onFail: PORT_FAIL },
+        { id: "battery", title: "Disconnect the battery and try adapter only", detail: "A failed battery can stop some laptops from starting." },
+        { id: "shorts", title: "Check the main power rail for a short to ground", detail: "Adapter and battery disconnected.", onFail: SHORT_FAIL },
+        { id: "reset", title: "Drain residual power and reset the embedded controller", detail: "Disconnect battery and coin cell, hold power for 30 seconds, reconnect." },
+      ],
+    },
+    {
+      id: "no-display",
+      title: "No display",
+      summary: "Powers on but no picture.",
+      steps: [
+        { id: "external", title: "Test with an external monitor", detail: "Picture on the external screen points to the panel, its cable or the backlight." },
+        { id: "backlight", title: "Torch test for a backlight fault", detail: "Shine a light at the screen; a faint image means the backlight or its fuse." },
+        { id: "cable", title: "Reseat the display cable", detail: "Check for pinched or damaged sections at the hinge." },
+        { id: "ram", title: "Reseat or test the RAM", detail: "Many laptops show nothing on screen with a RAM fault." },
+      ],
+    },
+    {
+      id: "battery",
+      title: "Battery replacement",
+      summary: "Bottom case off, battery out.",
+      steps: [
+        { id: "open", title: "Remove the bottom case", onFail: OPEN_FAIL },
+        { id: "disconnect", title: "Disconnect the battery", detail: "Before touching any other connector." },
+        { id: "swap", title: "Swap the battery", detail: "Glued batteries: use isopropyl alcohol and slow, even pressure. Never puncture a cell." },
+        { id: "test", title: "Test charging before closing" },
+      ],
+    },
+  ];
+}
+
+function consoleProcedures(): Procedure[] {
+  return [
+    {
+      id: "no-power",
+      title: "No power / no video diagnosis",
+      summary: "Generic console checks; add photos to map the teardown.",
+      steps: [
+        { id: "inspect", title: "Visual inspection", detail: "Liquid, burnt parts, the HDMI port and the area around it.", onFail: INSPECT_FAIL },
+        {
+          id: "12v",
+          title: "Confirm 12 V from the power supply",
+          detail: "Measure where the PSU feeds the board. Do not open the PSU: it carries mains voltage.",
+          onFail: [
+            { title: "Check the 12 V rail for a short to ground", detail: "A board-side short can stop the supply from starting." },
+            { title: "Test with a known-good power supply", detail: "Swap the PSU rather than opening it." },
+          ],
+        },
+        { id: "shorts", title: "Check the 12 V rail for a short to ground", onFail: SHORT_FAIL },
+        { id: "hdmi", title: "Check the HDMI port", detail: "Bent or missing pins, and +5 V on pin 18 when the console is on." },
+        { id: "rails", title: "Check the regulator outputs around the main chip" },
+      ],
+    },
+    {
+      id: "fan-clean",
+      title: "Cleaning and overheating",
+      summary: "Open, clean the fan and heatsink, renew thermal paste if needed.",
+      steps: [
+        { id: "open", title: "Open the console", onFail: OPEN_FAIL },
+        { id: "clean", title: "Clean the fan and heatsink", detail: "Blow dust out in the direction of airflow; hold the fan still while doing so." },
+        { id: "paste", title: "Renew thermal paste if temperatures stay high", detail: "Some models use liquid metal: clean and re-apply it with care, it is conductive." },
+        { id: "test", title: "Reassemble and test under load" },
+      ],
+    },
+  ];
+}
+
+function switchProcedures(): Procedure[] {
+  const [noPower, battery, charging] = mobileProcedures(true);
+  return [
+    noPower,
+    {
+      id: "no-dock-video",
+      title: "No video on the TV (dock)",
+      summary: "Handheld works but the dock gives no picture.",
+      steps: [
+        { id: "dock-power", title: "Use the original dock power adapter", detail: "Many third-party chargers can't power the dock's video output." },
+        { id: "dock-hdmi", title: "Test the dock with another HDMI cable and TV" },
+        { id: "usb-c", title: "Inspect the console's USB-C port", detail: "Bent pins or debris also cause charging faults.", onFail: PORT_FAIL },
+        { id: "dock-test", title: "Test the console in a known-good dock", detail: "Separates a dock fault from a console fault." },
+      ],
+    },
+    battery,
+    charging,
+  ];
+}
+
+function starter(id: string, name: string, group: DeviceGroup, ifixit: string, procedures: Procedure[], revisions: string[] = []): DeviceProfile {
+  return { id, name, group, ifixit, starter: true, revisions, sources: [], views: {}, screws: {}, procedures };
+}
+
+const STARTERS: DeviceProfile[] = [
+  starter("ps4", "PlayStation 4", "Consoles", "PlayStation 4", consoleProcedures()),
+  starter("xbox-series-s", "Xbox Series S", "Consoles", "Xbox Series S", consoleProcedures()),
+  starter("xbox-one", "Xbox One", "Consoles", "Xbox One", consoleProcedures()),
+  starter("switch", "Nintendo Switch", "Consoles", "Nintendo Switch", switchProcedures(), ["HAC-001", "HAC-001(-01)", "HEG-001", "HDH-001"]),
+  starter("switch-2", "Nintendo Switch 2", "Consoles", "Nintendo Switch 2", switchProcedures()),
+  starter("iphone", "iPhone", "Phones", "iPhone 15", mobileProcedures(true)),
+  starter("pixel", "Google Pixel", "Phones", "Google Pixel 8", mobileProcedures(true)),
+  starter("galaxy-s", "Samsung Galaxy S", "Phones", "Samsung Galaxy S24", mobileProcedures(true)),
+  starter("ipad", "iPad", "Tablets", "iPad 10", mobileProcedures(true)),
+  starter("android-tablet", "Android tablet", "Tablets", "Samsung Galaxy Tab S9", mobileProcedures(true)),
+  starter("macbook", "MacBook", "Laptops", "MacBook Air 13\" M2 2022", laptopProcedures()),
+  starter("windows-laptop", "Windows laptop", "Laptops", "Dell XPS 13 9310", laptopProcedures()),
+];
+
 export const CUSTOM_ID = "custom";
 
 const CUSTOM: DeviceProfile = {
@@ -452,7 +656,9 @@ const CUSTOM: DeviceProfile = {
   ],
 };
 
-export const DEVICES: DeviceProfile[] = [PS5, XSX];
+export const DEVICES: DeviceProfile[] = [PS5, XSX, ...STARTERS];
+
+export const DEVICE_GROUPS: DeviceGroup[] = ["Consoles", "Phones", "Tablets", "Laptops"];
 
 export function getDevice(id: string): DeviceProfile {
   return DEVICES.find((d) => d.id === id) ?? CUSTOM;

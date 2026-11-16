@@ -381,7 +381,16 @@ function LogReadingForm({ onDone }: { onDone: () => void }) {
 
       <fieldset className="space-y-2">
         <legend className="text-lg font-semibold text-bench-muted">
-          Expected range {ref ? <span className="text-bench-ok">· from known-good reference</span> : "(optional)"}
+          Expected range{" "}
+          {ref ? (
+            ref.source.startsWith("Placeholder") ? (
+              <span className="text-bench-accent">· placeholder (typical value, not measured)</span>
+            ) : (
+              <span className="text-bench-ok">· from known-good reference</span>
+            )
+          ) : (
+            "(optional)"
+          )}
         </legend>
         <div className="flex items-center gap-2">
           <input value={min} onChange={(e) => setMin(e.target.value)} inputMode="decimal" placeholder="min" aria-label="Expected minimum" className={`${field} font-mono`} />

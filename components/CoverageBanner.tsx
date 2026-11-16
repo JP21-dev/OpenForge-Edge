@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { CircleDot, Database, Ruler, X } from "lucide-react";
+import { BookOpen, CircleDot, Database, Ruler, X } from "lucide-react";
 import { useRepairStore } from "@/store/useRepairStore";
+import { IfixitPull } from "@/components/IfixitPull";
 
 export function CoverageBanner() {
   const coverage = useRepairStore((s) => s.coverage);
@@ -11,6 +12,7 @@ export function CoverageBanner() {
   const setMainView = useRepairStore((s) => s.setMainView);
   const setHudTab = useRepairStore((s) => s.setHudTab);
   const [dismissed, setDismissed] = useState<string | null>(null);
+  const [showPull, setShowPull] = useState(false);
 
   const key = `${deviceModel}|${boardRevision}`;
   if (!coverage || coverage.level === "ok" || dismissed === key) return null;
@@ -28,7 +30,9 @@ export function CoverageBanner() {
           </p>
           <p className="text-lg">
             {c.reference_values}/{coverage.targets.reference_values} known-good values · {c.known_good_boards} good boards measured ·{" "}
-            {c.repairs}/{coverage.targets.repairs} repairs · {c.schematics} schematics. Help build it while you work:
+            {c.repairs}/{coverage.targets.repairs} repairs · {c.schematics} schematics
+            {c.placeholders > 0 && ` · ${c.placeholders} placeholder value${c.placeholders === 1 ? "" : "s"} (typical values, replaced by your first captures)`}.
+            Help build it while you work:
           </p>
           <ul className="list-inside list-disc text-lg text-bench-muted">
             <li>On a working board, capture known-good values from the checklist.</li>
@@ -47,6 +51,15 @@ export function CoverageBanner() {
               <Database className="size-5" aria-hidden />
               Capture known-good values
             </button>
+            {c.knowledge_chunks === 0 && (
+              <button
+                onClick={() => setShowPull((v) => !v)}
+                className="flex h-12 items-center gap-2 rounded-xl bg-bench-raised px-4 text-lg font-semibold hover:bg-bench-border"
+              >
+                <BookOpen className="size-5" aria-hidden />
+                Pull public guides
+              </button>
+            )}
             <button
               onClick={() => setHudTab("reference")}
               className="flex h-12 items-center gap-2 rounded-xl bg-bench-raised px-4 text-lg font-semibold hover:bg-bench-border"
@@ -55,6 +68,7 @@ export function CoverageBanner() {
               Add a reference value
             </button>
           </div>
+          {showPull && <IfixitPull compact onPulled={() => useRepairStore.getState().setCoverage({ ...coverage, counts: { ...c, knowledge_chunks: 1 } })} />}
         </div>
         <button onClick={() => setDismissed(key)} aria-label="Hide for now" className="grid size-10 shrink-0 place-items-center rounded-lg hover:bg-bench-raised">
           <X className="size-6" />

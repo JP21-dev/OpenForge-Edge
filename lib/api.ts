@@ -53,6 +53,7 @@ export interface ReferenceValue {
   expected_max: number;
   source: string;
   note: string;
+  measured?: { count: number; boards: number; min: number; max: number };
 }
 
 export interface ReferenceInput {
@@ -163,6 +164,7 @@ export interface Coverage {
     schematics: number;
     knowledge_chunks: number;
     patterns: number;
+    placeholders: number;
   };
   targets: { reference_values: number; repairs: number };
 }
@@ -187,6 +189,16 @@ export interface StepPhoto {
   width: number;
   height: number;
   markers: Record<string, [number, number]>;
+}
+
+export interface PulledGuide {
+  id?: string;
+  guideid: number;
+  title: string;
+  type: string;
+  url: string;
+  steps: number;
+  fetched_at?: string;
 }
 
 export class ApiError extends Error {}
@@ -280,6 +292,11 @@ export const api = {
   saveStepMarkers: (id: string, markers: StepPhoto["markers"]) =>
     request<StepPhoto>(`/api/step-photos/${id}/markers`, json("PUT", { markers })),
   deleteStepPhoto: (id: string) => request<{ deleted: string }>(`/api/step-photos/${id}`, { method: "DELETE" }),
+  pullIfixit: (body: { device_model: string; ifixit_device: string; max_guides?: number }) =>
+    request<{ ifixit_device: string; guides: PulledGuide[]; chunks: number; suggestions: string[] }>("/api/knowledge/ifixit", json("POST", body)),
+  listIfixit: (deviceModel: string) => request<PulledGuide[]>(`/api/knowledge/ifixit${query({ device_model: deviceModel })}`),
+  deleteIfixit: (id: string) => request<{ deleted: string }>(`/api/knowledge/ifixit/${id}`, { method: "DELETE" }),
+
   stepPhotoUrl: (id: string) => `${API_URL}/api/step-photos/${id}/image`,
 
   saveRepair: (body: RepairInput) => request<RepairRecord & { patterns?: Pattern[] }>("/api/repairs", json("POST", body)),

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Eye, FileImage, Loader2, RefreshCw, Trash2, UploadCloud } from "lucide-react";
 import { useRepairStore } from "@/store/useRepairStore";
 import { api, type SchematicSummary } from "@/lib/api";
+import { IfixitPull } from "@/components/IfixitPull";
 
 const ACCEPT = "application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif,image/bmp,image/tiff,.heic,.heif";
 
@@ -34,6 +35,7 @@ export function IngestPanel() {
     <section className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8" aria-label="Schematic ingest">
       <div className="mx-auto max-w-4xl space-y-8">
         <UploadForm onUploaded={refresh} />
+        <IfixitPull />
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold uppercase tracking-wider text-bench-muted">Library</h2>

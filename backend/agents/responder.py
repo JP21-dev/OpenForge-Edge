@@ -38,7 +38,7 @@ SYSTEM = """You are OpenForge Edge, an offline copilot for electronics repair te
 The technician's hands are busy: answer in short, numbered, actionable steps and lead with the single next action.
 The reference excerpts are ordered by relevance. Answer the technician's exact symptom or question from the excerpt that matches it most closely, and ignore excerpts about other faults.
 Only state part numbers, designators, values, screw counts or tool sizes that appear in the excerpts, the known-good reference values or the logged readings. If they do not cover the question, say it is not in the knowledge base yet instead of guessing.
-Use the logged meter readings when relevant. "This reading" means the most recent one. A reading marked OUT OF RANGE is a fault lead: name it and say what to check next. Judge a reading in or out of range only from its logged expected range, a known-good reference value, or a value stated in the excerpts. Known-good reference values were measured or confirmed by this shop and outrank excerpts.
+Use the logged meter readings when relevant. "This reading" means the most recent one. A reading marked OUT OF RANGE is a fault lead: name it and say what to check next. Judge a reading in or out of range only from its logged expected range, a known-good reference value, or a value stated in the excerpts. Known-good reference values were measured or confirmed by this shop and outrank excerpts. Values whose source starts with "Placeholder" are only typical values from an interface standard (USB, HDMI, battery chemistry), not measured on this board: say so when you use one.
 Excerpts labelled "Past repair" are this shop's earlier jobs on the same device: mention a matching one as a lead ("a previous board with this symptom had …"), never as proof.
 Excerpts labelled "Recurring pattern" summarise several fixed repairs with the same symptom and cause on this bench: when one matches, name it early as the most likely lead and say how many repairs it is based on.
 Excerpts from schematics were transcribed by a vision model: when you rely on one, tell the technician which page to confirm it on.
@@ -80,15 +80,27 @@ def _format_readings(readings: list[dict]) -> str:
 def _format_references(refs: list[dict]) -> str:
     if not refs:
         return "(none)"
-    lines = []
+    lines, typical = [], []
     for r in refs:
+        if r.get("placeholder") or str(r.get("source", "")).startswith("Placeholder"):
+            typical.append(
+                f"- {r['test_point']} ({r['mode']}): typically {r['expected_min']}–{r['expected_max']} {r['unit']}"
+                f" ({r['source'].removeprefix('Placeholder: ')})"
+            )
+            continue
         rev = f" [{r['board_rev']}]" if r.get("board_rev") else ""
         source = f" (source: {r['source']})" if r.get("source") else ""
         note = f" — {r['note']}" if r.get("note") else ""
         measured = r.get("measured")
         seen = f"; measured on {measured['boards']} good board(s): {measured['min']}–{measured['max']} {r['unit']}" if measured else ""
         lines.append(f"- {r['test_point']}{rev} ({r['mode']}): {r['expected_min']}–{r['expected_max']} {r['unit']}{source}{seen}{note}")
-    return "\n".join(lines)
+    out = "\n".join(lines) if lines else "(none measured yet)"
+    if typical:
+        out += (
+            "\n\nTypical values only (placeholders from interface standards, NOT measured on this model or by this shop;"
+            " when you quote one, call it a typical value):\n" + "\n".join(typical)
+        )
+    return out
 
 
 def _format_context(docs: list[dict]) -> str:

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from db import db, now, public
 from knowledge import ANY_REV, board_rev, device_slug
+from starter import drop_placeholders
 
 router = APIRouter(prefix="/api", tags=["reference"])
 
@@ -100,12 +101,14 @@ def save_reference(
         doc["measured"] = measured
     existing = find_reference(device, rev, test_point, mode)
     if existing:
-        db().reference_values.update_one({"_id": existing["_id"]}, {"$set": doc})
+        db().reference_values.update_one({"_id": existing["_id"]}, {"$set": doc, "$unset": {"placeholder": ""}})
         doc = {**existing, **doc}
+        doc.pop("placeholder", None)
     else:
         doc["_id"] = uuid.uuid4().hex
         doc["created_at"] = doc["updated_at"]
         db().reference_values.insert_one(doc)
+    drop_placeholders(device, test_point, mode, keep_id=doc["_id"])
     return _out(doc)
 
 

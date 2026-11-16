@@ -10,10 +10,12 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from pydantic import BaseModel, Field
 
 import history
+import ifixit
 import knowledge
 import mode
 import reference
 import schematics
+import starter
 import capture
 import photos
 import suggest
@@ -27,6 +29,10 @@ log = logging.getLogger("openforge")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     schematics.start_worker()
+    try:
+        starter.seed_placeholders()
+    except Exception as exc:
+        log.warning("Could not seed placeholder reference values: %s", exc)
     yield
 
 
@@ -37,6 +43,7 @@ app.include_router(history.router)
 app.include_router(suggest.router)
 app.include_router(capture.router)
 app.include_router(photos.router)
+app.include_router(ifixit.router)
 app.include_router(history.patterns_router)
 
 app.add_middleware(

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Wrench } from "lucide-react";
 import { selectProcedure, useRepairStore } from "@/store/useRepairStore";
-import { CUSTOM_ID, DEVICES, getDevice } from "@/lib/devices";
+import { CUSTOM_ID, DEVICE_GROUPS, DEVICES, getDevice } from "@/lib/devices";
 
 function useDismiss(open: boolean, close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -55,12 +55,18 @@ export function DevicePicker() {
         <ChevronDown className="size-6 shrink-0 text-bench-muted" aria-hidden />
       </button>
       {open && (
-        <div role="menu" className={menu}>
-          {DEVICES.map((d) => (
-            <button key={d.id} role="menuitemradio" aria-checked={deviceId === d.id} onClick={() => pick(d.id)} className={item}>
-              <span className="flex-1 font-semibold">{d.name}</span>
-              {deviceId === d.id && <Check className="size-6 text-bench-accent" aria-hidden />}
-            </button>
+        <div role="menu" className={`${menu} max-h-[70vh] overflow-y-auto`}>
+          {DEVICE_GROUPS.map((group) => (
+            <div key={group} role="group" aria-label={group}>
+              <div className="px-4 pb-1 pt-2 text-sm font-bold uppercase tracking-wider text-bench-muted">{group}</div>
+              {DEVICES.filter((d) => d.group === group).map((d) => (
+                <button key={d.id} role="menuitemradio" aria-checked={deviceId === d.id} onClick={() => pick(d.id)} className={`${item} py-2`}>
+                  <span className="flex-1 font-semibold">{d.name}</span>
+                  {d.starter && <span className="rounded bg-bench-raised px-1.5 font-mono text-xs text-bench-muted">starter</span>}
+                  {deviceId === d.id && <Check className="size-6 text-bench-accent" aria-hidden />}
+                </button>
+              ))}
+            </div>
           ))}
           <form
             onSubmit={(e) => {

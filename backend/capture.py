@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 import reference
 from config import settings
+from starter import DEFAULT_POINTS
 from db import db, now, public
 from knowledge import ANY_REV, board_rev, collection, device_slug
 
@@ -16,27 +17,6 @@ router = APIRouter(prefix="/api", tags=["capture"])
 
 MeterMode = Literal["DCV", "ACV", "OHM", "DIODE", "CONT", "AMP"]
 UNITS = {"DCV": "V", "ACV": "V", "OHM": "Ω", "DIODE": "V", "CONT": "Ω", "AMP": "A"}
-
-# Generic starting points. Locations and designators differ per revision, so
-# techs replace or extend these with their own list (see /capture/import).
-DEFAULT_POINTS: dict[str, list[tuple[str, str, str]]] = {
-    "ps5": [
-        ("12 V input from PSU", "DCV", "Power supply prongs on the board, console on standby"),
-        ("12 V rail to ground", "DIODE", "Power off, red probe on ground"),
-        ("5 V rail", "DCV", "Main 5 V rail, console on standby"),
-        ("3.3 V standby rail", "DCV", "Console on standby"),
-        ("HDMI port pin 18 (+5 V)", "DCV", "Console powered on"),
-        ("APU core rail to ground", "DIODE", "Power off, at the capacitors beside the APU"),
-    ],
-    "xbox-series-x": [
-        ("12 V at 10-pin power connector", "DCV", "Console on standby; do not open the PSU"),
-        ("12 V input to ground", "DIODE", "Power off, red probe on ground"),
-        ("HDMI port pin 18 (+5 V)", "DCV", "Console powered on"),
-        ("SoC core rail to ground", "DIODE", "Power off, at the capacitors beside the SoC"),
-        ("SSD 3.3 V", "DCV", "Console powered on, at the M.2 connector"),
-    ],
-}
-
 
 def point_key(test_point: str) -> str:
     return re.sub(r"\s+", " ", test_point.strip().lower())
@@ -160,7 +140,7 @@ def capture_plan(device_model: str, board_revision: str = "", board_label: str =
     rev = board_rev(board_revision)
     points: dict[tuple[str, str], dict] = {}
 
-    for tp, mode, hint in DEFAULT_POINTS.get(device or "", []):
+    for tp, mode, hint, _placeholder in DEFAULT_POINTS.get(device or "", []):
         points[(point_key(tp), mode)] = {"id": None, "test_point": tp, "mode": mode, "hint": hint, "origin": "default"}
 
     frequent = db().bench_readings.aggregate([
@@ -218,7 +198,7 @@ def add_sample(body: SampleIn) -> dict:
     )
     measured = {k: v for k, v in _stats(device, rev)[(key, body.mode)].items() if k != "test_point"}
     current = reference.find_reference(device, rev, body.test_point, body.mode)
-    capture_owned = not current or str(current.get("source", "")).startswith(reference.CAPTURE_SOURCE)
+    capture_owned = not current or current.get("placeholder") or str(current.get("source", "")).startswith(reference.CAPTURE_SOURCE)
     boards = measured["boards"]
     if capture_owned:
         m = _margin(measured["min"], measured["max"])
@@ -260,14 +240,15 @@ def coverage(device_model: str, board_revision: str = "") -> dict:
     rev = board_rev(board_revision)
     rev_q = _rev_query(rev)
     counts = {
-        "reference_values": db().reference_values.count_documents({"device": device, "board_rev": rev_q}),
+        "reference_values": db().reference_values.count_documents({"device": device, "board_rev": rev_q, "placeholder": {"$ne": True}}),
+        "placeholders": db().reference_values.count_documents({"device": device, "placeholder": True}),
         "known_good_boards": len(db().known_good_samples.distinct("board_label", {"device": device, **({"board_rev": rev} if rev != ANY_REV else {})})),
         "repairs": db().repairs.count_documents({"device": device}),
         "schematics": db().schematics.count_documents({"device": device, "board_rev": rev_q}),
         "knowledge_chunks": _chunk_count(device),
         "patterns": db().patterns.count_documents({"device": device, "status": {"$ne": "dismissed"}}),
     }
-    if not any(counts.values()):
+    if not any(v for k, v in counts.items() if k != "placeholders"):
         level = "none"
     elif counts["reference_values"] < settings.coverage_min_references or counts["repairs"] < settings.coverage_min_repairs:
         level = "low"

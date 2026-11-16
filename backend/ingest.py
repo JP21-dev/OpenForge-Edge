@@ -135,15 +135,17 @@ def store_pieces(key: str, base: dict, pieces: list[dict], replace: dict | None 
 def _restore_uploads() -> int:
     try:
         import history
+        import ifixit
         import schematics
 
         pages = schematics.reindex_all()
+        guides = ifixit.reindex_all()
         repairs = history.reindex_all()
     except Exception as exc:
-        print(f"  could not restore uploaded schematics and repair history: {exc}", file=sys.stderr)
+        print(f"  could not restore uploaded schematics, iFixit guides and repair history: {exc}", file=sys.stderr)
         return 0
-    print(f"  restored {pages} chunks from uploaded schematics and {repairs} past repairs")
-    return pages
+    print(f"  restored {pages} chunks from uploaded schematics, {guides} from iFixit guides and {repairs} past repairs")
+    return pages + guides
 
 
 def main() -> int:

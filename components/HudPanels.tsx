@@ -64,7 +64,10 @@ export function ReferencePanel() {
       {!references.length && <p className="text-lg text-bench-muted">No reference values for this board yet.</p>}
       <ul className="space-y-3">
         {references.map((r) => (
-          <li key={r.id} className="flex items-center gap-3 rounded-xl border-l-8 border-bench-ok bg-bench-raised p-4">
+          <li
+            key={r.id}
+            className={`flex items-center gap-3 rounded-xl border-l-8 bg-bench-raised p-4 ${r.source.startsWith("Placeholder") ? "border-dashed border-bench-border" : "border-bench-ok"}`}
+          >
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="truncate text-xl font-semibold">{r.test_point}</span>

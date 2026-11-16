@@ -21,11 +21,13 @@ Built to run entirely on local edge devices, OpenForge Edge removes the reliance
 *   **AMD Lemonade Ready:** Switch the whole AI stack (chat and embeddings) to Lemonade with `.env.lemonade.example` and a setup script. Runs on Ryzen AI NPU + iGPU (Hybrid) or Radeon GPUs; Ollama (`qwen2.5:7b`) remains available for other hardware.
 *   **Streaming Bench Chat:** Large, high-contrast chat built for use mid-repair. Answers stream in as they are generated, with live agent status ("Triaging issue…", "Searching schematics…") and cited manual excerpts.
 *   **Multimeter HUD & Diode Testing:** Log readings from any meter with large touch targets (test point, mode, value, optional expected range). Readings are flagged in/out of range and sent to the copilot, so you can ask "Is this reading bad?" or "What should I check next?".
-*   **Device Profiles:** PlayStation 5 and Xbox Series X built in, plus any other device by name. Switching devices keeps a separate session for each, so you can flip between benches and pick up where you left off.
+*   **Device Profiles:** Full profiles (screw maps, iFixit-sourced notes) for PlayStation 5 and Xbox Series X, starter profiles for PlayStation 4, Xbox Series S, Xbox One, Nintendo Switch and Switch 2, iPhone, Google Pixel, Samsung Galaxy S, iPad, Android tablets, MacBook and Windows laptops, plus any other device by name. Switching devices keeps a separate session for each, so you can flip between benches and pick up where you left off.
 *   **Repair Procedures and 2D Screw Maps:** Choose the repair (no-power diagnosis, fan cleaning, APU repaste, optical drive, SSD access). Each step shows a 2D layout of that stage with only the screws that step removes, colour-coded by length. Tap screws as they come out; the next step unlocks when they're all out.
 *   **Known-Good Capture:** A guided checklist for measuring a working board, test point by test point. Every value is saved to the local database, and values from several boards are combined into the reference range. Import your own test point lists and expected values (CSV or JSON) from your boardview software.
 *   **Step Photos:** Photograph each teardown stage and tap to place its screws on the photo, replacing the approximate drawing with an exact map.
 *   **Automatic Recurring Patterns:** When three or more fixed repairs share a similar symptom and root cause, they are promoted to a recurring pattern. The copilot names it first on matching symptoms and the failed-step panel suggests it.
+*   **Placeholders and iFixit Import:** New devices start with clearly-marked typical values from interface standards (USB, HDMI, Li-ion, 12 V supplies) that your first captures replace, and can pull their public iFixit guides into the local knowledge base in one click.
+*   **Backups:** One command backs up everything the bench has learned; another restores it and rebuilds the search index.
 *   **Data Coverage Prompts:** When a device or board revision has little or no saved data, the Bench UI says so, asks for known-good captures and finished repairs, and shows a "Recording" indicator so the tech knows what is being saved.
 *   **Failed-Step Suggestions:** When a step fails (the red ✕), the copilot suggests what to do next: built-in follow-ups for that step plus suggestions drawn from the manuals, schematics, readings and past repairs. Pick the ones you want and they are inserted into the repair.
 *   **Local RAG for Repair Manuals:** Ingest schematic PDFs, Markdown notes and JSON measurement files into ChromaDB with local `nomic-embed-text` embeddings. Answers cite the excerpts they used, and questions asking for a voltage, reading or resistance the knowledge base doesn't contain get "not in the knowledge base yet" instead of a guess.
@@ -99,6 +101,8 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 │   ├── suggest.py          Next-step suggestions after a failed step
 │   ├── capture.py          Known-good capture, test point import, coverage, bench reading log
 │   ├── photos.py           Step photos and screw marker positions
+│   ├── starter.py          Starting test points and placeholder values per device
+│   ├── ifixit.py           Pulls public iFixit guides into the knowledge base
 │   ├── db.py               MongoDB connection
 │   ├── llm.py, config.py, state.py
 │   └── requirements.txt
@@ -106,7 +110,9 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 ├── scripts/
 │   ├── setup-lemonade.ps1  Lemonade setup for Windows
 │   ├── setup-lemonade.sh   Lemonade setup for Linux
-│   └── offline-check.ps1   Checks everything is local before going offline
+│   ├── offline-check.ps1   Checks everything is local before going offline
+│   ├── backup.ps1          Backs up MongoDB, uploads and data/manuals
+│   └── restore.ps1         Restores a backup and rebuilds the search index
 ├── Dockerfile.frontend
 ├── Dockerfile.backend
 ├── docker-compose.yml
@@ -253,7 +259,7 @@ The backend container mounts this folder read-only at `/app/manuals`.
     }
     ```
 
-**Device detection:** a question is searched within a device's documents when the session's device name or the question mentions it (PS5: "PS5", "PlayStation 5", "CFI-1…", "EDM-0…"; Xbox Series X: "Xbox Series X", "Series X", "XSX"). Add aliases for new devices in `DEVICE_ALIASES` in `backend/knowledge.py`; the key must match the device's folder name in `data/manuals/`.
+**Device detection:** a question is searched within a device's documents when the session's device name or the question mentions it (PS5: "PS5", "PlayStation 5", "CFI-1…", "EDM-0…"; Xbox Series X: "Xbox Series X", "Series X", "XSX"; and so on for every built-in device). The session's device always wins over words in the question, so "dead pixels" on an iPhone stays on the iPhone. Add aliases for new devices in `DEVICE_ALIASES` in `backend/knowledge.py`; the key must match the device's folder name in `data/manuals/`.
 
 ---
 
@@ -277,11 +283,17 @@ Tick the steps you want and press **Add steps and continue**: the failed step is
 
 Screw counts and lengths come from iFixit's guides, linked in the panel. The drawings are simplified and positions are approximate (iFixit's photos are not bundled, so the app stays offline): match screws by colour and length.
 
-| Device | Repairs |
-|---|---|
-| PlayStation 5 (original) | No power / no video diagnosis, fan cleaning, APU liquid metal service |
-| Xbox Series X | No power / no video diagnosis, fan cleaning, optical drive service, internal SSD access |
-| Any other device | General diagnosis steps, no screw map |
+| Device | Profile | Repairs |
+|---|---|---|
+| PlayStation 5 (original) | Full: screw map, iFixit notes | No power / no video, fan cleaning, APU liquid metal service |
+| Xbox Series X | Full: screw map, iFixit notes | No power / no video, fan cleaning, optical drive, internal SSD |
+| PlayStation 4, Xbox Series S, Xbox One | Starter | No power / no video, cleaning and overheating |
+| Nintendo Switch, Switch 2 | Starter | No power / no boot, no video in the dock, battery, charging port |
+| iPhone, Google Pixel, Samsung Galaxy S, iPad, Android tablet | Starter | No power / no boot, battery, charging port |
+| MacBook, Windows laptop | Starter | No power, no display, battery |
+| Any other device | Generic | General diagnosis steps |
+
+**Starter profiles** have generic, model-independent procedures and no screw drawings. Take a photo at each teardown step and place the screws on it to build an exact map. They are marked "starter" in the device menu.
 
 **Adding a device:** add a profile to `DEVICES` in `lib/devices.ts` (views drawn on a 100 × 160 grid, screw groups with positions, procedures whose steps list screw group ids and optional `onFail` suggestions), add its aliases to `DEVICE_ALIASES`, and put its notes in `data/manuals/<device-id>/`.
 
@@ -375,11 +387,51 @@ PP5V0_S5;diode;0,452;C7120 near the USB port
 
 Only values are imported, never images. Data from paid boardview tools such as XZZ is licensed for your own bench: it stays in this machine's database, is not part of the repository, and should not be shown in public demos.
 
+### Placeholders until your first recordings
+So a new device isn't empty, the backend seeds a few **placeholder** reference values at startup for every built-in device, only where an interface standard defines the value:
+
+| Placeholder | Typical range | Basis |
+|---|---|---|
+| USB-C VBUS (5 V charger) | 4.75–5.25 V | USB 5 V ±5 % |
+| USB-C PD input (20 V) | 19–21 V | USB PD 20 V ±5 % |
+| Battery voltage at connector (phones, tablets, Switch) | 3.0–4.45 V | Typical Li-ion working range |
+| HDMI port pin 18 (+5 V) | 4.8–5.3 V | HDMI specification |
+| 12 V input from the PSU (consoles) | 11.4–12.6 V | 12 V ±5 % |
+| RTC / CMOS coin cell (Windows laptops) | 2.8–3.3 V | Typical CR2032 |
+
+Placeholders are shown with a dashed border in the Reference tab and as "placeholder (typical value)" in the meter. The copilot calls them typical values, and they don't count toward the coverage targets. The first known-good capture or reference value you save for the same test point replaces the placeholder automatically.
+
+No placeholder repair history, patterns or board-specific values are generated: made-up repairs would teach the pattern detector and the copilot things that never happened.
+
+### Pulling public guides from iFixit
+**Pull public guides** (in the low-data banner, and in Ingest mode) fetches a device's iFixit teardown and main replacement guides (motherboard, battery, charging port, fan, screen first; up to 8) and stores their text in MongoDB and ChromaDB. Answers cite them as "iFixit: <guide title>".
+*   Type the exact model on the bench (e.g. "iPhone 13 Pro"); close names are resolved with iFixit's search.
+*   It needs internet once. Afterwards the guides work offline and survive `ingest.py --reset` and backups.
+*   iFixit guides are licensed CC BY-NC-SA: they stay in this bench's database, are credited in every answer, and are never committed to git.
+
 ### Recurring patterns
 Each time a repair is saved as **Fixed** with a root cause, the backend compares it with the other fixed repairs on the same device. When at least `PATTERN_MIN_REPAIRS` (default 3) have a similar symptom and a similar root cause (cosine similarity of their embeddings ≥ `PATTERN_SIMILARITY`, default 0.78), they become a recurring pattern:
 *   The copilot gets it as a "Recurring pattern · N repairs" excerpt and names it first on matching symptoms.
 *   The failed-step panel lists it under **From your repair history**, pre-selected.
 *   The History tab lists all patterns. **Verify** marks one as checked by a tech; **Dismiss** stops it being suggested. Patterns are rebuilt as repairs are added or deleted, but verified and dismissed decisions are kept.
+
+---
+
+## 💾 Backups
+
+Everything the bench learns (reference values, captures, repair history and patterns, schematic pages and corrected text, step photos, pulled iFixit guides) lives in Docker volumes. Back it up regularly:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\backup.ps1
+```
+Each run writes `backups/openforge-<date>-<time>/` with a gzipped MongoDB archive, the uploads volume, a zip of `data/manuals` (including private PDFs) and a manifest, and keeps the newest 14. Options: `-Destination D:\bench-backups` (e.g. a USB drive) and `-Keep 30`. The `backups/` folder is git-ignored. ChromaDB is not copied; the restore rebuilds it.
+
+Restore (replaces the current data, asks for confirmation):
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\restore.ps1 -Backup backups\openforge-20261116-031500
+```
+Add `-Force` to skip the prompt and `-SkipManuals` to leave `data/manuals` alone. The script restarts the backend and runs `ingest.py --reset`, which re-indexes manuals, schematic pages, iFixit guides, repair history and patterns.
+
+To back up automatically, add a daily Windows Task Scheduler task that runs the backup command above with the repository folder as its working directory.
 
 ---
 
@@ -578,6 +630,8 @@ docker compose exec backend python ingest.py --reset
 | `POST` | `/api/capture/points`, `/api/capture/import` | Add one test point, or import a list |
 | `GET` | `/api/coverage` | How much data exists for a device and revision |
 | `POST` | `/api/readings` | Log a bench reading |
+| `GET` / `POST` | `/api/knowledge/ifixit` | List or pull public iFixit guides (`device_model`, `ifixit_device`, `max_guides`) |
+| `DELETE` | `/api/knowledge/ifixit/{id}` | Remove a pulled guide |
 | `GET` / `POST` | `/api/step-photos` | List or upload step photos (`file`, `device_model`, `step_id`) |
 | `PUT` | `/api/step-photos/{id}/markers` | Save screw positions on a photo |
 | `DELETE` | `/api/repairs/{id}` | Delete a repair record |

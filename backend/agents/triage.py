@@ -41,7 +41,7 @@ def triage_node(state: AgentState) -> dict:
     session = state.get("session", {})
 
     try:
-        raw = get_llm(json_mode=True).invoke(
+        raw = get_llm(json_mode=True, deep=bool(session.get("deep"))).invoke(
             [SystemMessage(_prompt(SPECIALISTS, DIRECT, session)), HumanMessage(question)]
         )
         result = _parse(raw.content)

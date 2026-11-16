@@ -10,25 +10,29 @@ interface CopilotContext {
   currentStep?: string;
   schematic?: string;
   readings: MeterReading[];
+  deep?: boolean;
 }
 
 export interface CopilotReply {
   reply: string;
   route?: string;
   sources: CopilotSource[];
+  model?: string;
 }
 
 export interface CopilotHandlers {
   onRoute?: (route: string, issue: string) => void;
   onSources?: (sources: CopilotSource[]) => void;
   onToken?: (text: string) => void;
+  onThinking?: () => void;
 }
 
 type StreamEvent =
   | { type: "route"; route: string; issue: string }
   | { type: "sources"; sources: CopilotSource[] }
   | { type: "token"; text: string }
-  | { type: "done"; reply: string; trace: string[] }
+  | { type: "thinking" }
+  | { type: "done"; reply: string; trace: string[]; model?: string }
   | { type: "error"; detail: string };
 
 export async function askCopilot(
@@ -45,6 +49,7 @@ export async function askCopilot(
       board_revision: ctx.boardRevision || undefined,
       current_step: ctx.currentStep,
       active_schematic: ctx.schematic,
+      deep: ctx.deep ?? false,
       history: history
         .filter((m) => m.role !== "system")
         .slice(-MAX_HISTORY)
@@ -77,8 +82,12 @@ export async function askCopilot(
         result.reply += event.text;
         handlers.onToken?.(event.text);
         break;
+      case "thinking":
+        handlers.onThinking?.();
+        break;
       case "done":
         result.reply = event.reply;
+        result.model = event.model;
         break;
       case "error":
         result.reply = `⚠ ${event.detail}`;

@@ -21,6 +21,7 @@ import photos
 import suggest
 from config import settings
 from graph import repair_graph
+from llm import model_name
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("openforge")
@@ -78,6 +79,7 @@ class SessionState(BaseModel):
     active_schematic: str | None = None
     history: list[HistoryMessage] = Field(default_factory=list, max_length=50)
     readings: list[LoggedReading] = Field(default_factory=list, max_length=20)
+    deep: bool = False
 
 
 class ChatRequest(BaseModel):
@@ -97,6 +99,7 @@ class Source(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    model: str
     issue: str
     route: str
     sources: list[Source]
@@ -132,6 +135,7 @@ def health() -> dict:
     return {
         "status": "ok",
         "model": settings.llm_model,
+        "deep_model": settings.deep_model,
         "provider": settings.llm_provider,
         "vision_model": settings.vision_model,
         "mode": mode.current(),
@@ -202,6 +206,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     return ChatResponse(
         reply=result["reply"],
+        model=model_name(req.session.deep),
         issue=result.get("issue", ""),
         route=result.get("route", ""),
         sources=result.get("context", []),
@@ -215,6 +220,7 @@ def _event(payload: dict) -> str:
 
 async def _stream_events(req: ChatRequest) -> AsyncIterator[str]:
     trace: list[str] = []
+    thinking = False
     try:
         async for kind, data in repair_graph.astream(
             _initial_state(req), stream_mode=["updates", "messages"]
@@ -224,6 +230,9 @@ async def _stream_events(req: ChatRequest) -> AsyncIterator[str]:
                 if "internal" in (meta.get("tags") or []):
                     continue
                 if meta.get("langgraph_node") == "respond" and isinstance(chunk, AIMessageChunk):
+                    if not thinking and chunk.additional_kwargs.get("reasoning_content"):
+                        thinking = True
+                        yield _event({"type": "thinking"})
                     if chunk.content:
                         yield _event({"type": "token", "text": chunk.content})
                 continue
@@ -235,7 +244,7 @@ async def _stream_events(req: ChatRequest) -> AsyncIterator[str]:
                 if update.get("context"):
                     yield _event({"type": "sources", "sources": update["context"]})
                 if "reply" in update:
-                    yield _event({"type": "done", "reply": update["reply"], "trace": trace})
+                    yield _event({"type": "done", "reply": update["reply"], "trace": trace, "model": model_name(req.session.deep)})
     except Exception as exc:
         log.exception("Streaming graph run failed")
         yield _event({"type": "error", "detail": f"Local model unavailable at {settings.llm_base_url}: {exc}"})

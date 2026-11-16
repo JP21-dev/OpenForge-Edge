@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, FileText, History, Loader2, Mic, SendHorizonal, Wrench, ZoomIn } from "lucide-react";
+import { Bot, Brain, FileText, History, Loader2, Mic, SendHorizonal, Wrench, ZoomIn } from "lucide-react";
 import { selectCurrentStep, selectProcedure, useRepairStore, type ChatMessage } from "@/store/useRepairStore";
 import { askCopilot } from "@/lib/copilot";
 import { CoverageBanner } from "@/components/CoverageBanner";
@@ -21,8 +21,12 @@ const ROUTE_STATUS: Record<string, string> = {
 export function ChatPanel() {
   const messages = useRepairStore((s) => s.messages);
   const thinking = useRepairStore((s) => s.isCopilotThinking);
+  const deep = useRepairStore((s) => s.deepThinking);
+  const setDeep = useRepairStore((s) => s.setDeepThinking);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("");
+  const [startedAt, setStartedAt] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -32,6 +36,12 @@ export function ChatPanel() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, last?.content.length, thinking]);
+
+  useEffect(() => {
+    if (!awaitingFirstToken) return;
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [awaitingFirstToken, startedAt]);
 
   const send = async (text: string) => {
     const content = text.trim();
@@ -43,7 +53,11 @@ export function ChatPanel() {
     store.addMessage("technician", content);
     const { id } = store.addMessage("copilot", "");
     const update = useRepairStore.getState().updateMessage;
-    setStatus("Triaging issue…");
+    const useDeep = store.deepThinking;
+    update(id, () => ({ deep: useDeep }));
+    setStartedAt(Date.now());
+    setElapsed(0);
+    setStatus(useDeep ? "Loading the deep thinking model…" : "Triaging issue…");
     store.setCopilotThinking(true);
     try {
       const result = await askCopilot(
@@ -56,6 +70,7 @@ export function ChatPanel() {
           currentStep: `${selectProcedure(store).title}: step ${store.currentStepIndex + 1}, ${selectCurrentStep(store)?.title ?? ""}`,
           readings: store.readings,
           schematic: store.activeSchematic?.name,
+          deep: useDeep,
         },
         {
           onRoute: (route) => setStatus(ROUTE_STATUS[route] ?? `Consulting ${route.replace(/_/g, " ")}…`),
@@ -64,9 +79,10 @@ export function ChatPanel() {
             setStatus(ROUTE_STATUS.respond);
           },
           onToken: (t) => update(id, (m) => ({ content: m.content + t })),
+          onThinking: () => setStatus("Thinking it through…"),
         },
       );
-      update(id, () => ({ content: result.reply, sources: result.sources }));
+      update(id, () => ({ content: result.reply, sources: result.sources, model: result.model }));
     } finally {
       useRepairStore.getState().setCopilotThinking(false);
       inputRef.current?.focus();
@@ -84,6 +100,7 @@ export function ChatPanel() {
           <div className="flex items-center gap-3 text-xl text-bench-muted">
             <Loader2 className="size-7 animate-spin text-bench-accent" aria-hidden />
             {status}
+            {elapsed >= 3 && <span className="font-mono text-lg tabular-nums">{elapsed} s</span>}
           </div>
         )}
       </div>
@@ -118,6 +135,19 @@ export function ChatPanel() {
           >
             <Mic className="size-8" />
           </button>
+          <button
+            type="button"
+            onClick={() => setDeep(!deep)}
+            aria-pressed={deep}
+            aria-label="Deep thinking"
+            title={deep ? "Deep thinking on: slower, more thorough answers" : "Deep thinking off: fast answers"}
+            className={`flex h-16 shrink-0 flex-col items-center justify-center rounded-2xl border-2 px-3 text-xs font-bold transition-colors ${
+              deep ? "border-bench-accent bg-bench-accent/15 text-bench-accent" : "border-bench-border bg-bench-raised text-bench-muted hover:text-bench-text"
+            }`}
+          >
+            <Brain className="size-7" aria-hidden />
+            Deep
+          </button>
           <textarea
             ref={inputRef}
             value={input}
@@ -129,7 +159,7 @@ export function ChatPanel() {
               }
             }}
             rows={1}
-            placeholder="Describe the symptom or ask the copilot…"
+            placeholder={deep ? "Deep thinking: describe the problem in detail…" : "Describe the symptom or ask the copilot…"}
             aria-label="Message the copilot"
             className="max-h-40 min-h-16 flex-1 resize-none rounded-2xl border-2 border-bench-border bg-bench-bg px-5 py-4 text-xl placeholder:text-bench-muted focus:border-bench-accent focus:outline-none"
           />
@@ -177,6 +207,12 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         }`}
       >
         <span className="sr-only">{isTech ? "You: " : "Copilot: "}</span>
+        {message.deep && !isTech && (
+          <span className="mb-2 flex items-center gap-1 font-mono text-sm font-bold text-bench-accent">
+            <Brain className="size-4" aria-hidden />
+            DEEP THINKING{message.model && ` · ${message.model}`}
+          </span>
+        )}
         {message.content}
         {!!message.sources?.length && (
           <ul className="mt-4 space-y-2 border-t border-bench-border pt-3 text-base leading-snug md:text-lg">

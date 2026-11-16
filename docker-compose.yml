@@ -34,6 +34,9 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-lemonade}
       LLM_JSON_MODE: ${LLM_JSON_MODE:-true}
       LLM_ENABLE_THINKING: ${LLM_ENABLE_THINKING:-false}
+      DEEP_MODEL: ${DEEP_MODEL:-qwen3:8b}
+      DEEP_THINKING: ${DEEP_THINKING:-false}
+      DEEP_NUM_CTX: ${DEEP_NUM_CTX:-12288}
       EMBED_PROVIDER: ${EMBED_PROVIDER:-ollama}
       EMBED_BASE_URL: ${EMBED_BASE_URL:-http://host.docker.internal:11434}
       EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}

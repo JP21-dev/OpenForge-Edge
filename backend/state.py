@@ -11,6 +11,7 @@ class SessionInfo(TypedDict, total=False):
     current_step: str
     active_schematic: str
     readings: list[dict]
+    deep: bool
 
 
 class RetrievedDoc(TypedDict):

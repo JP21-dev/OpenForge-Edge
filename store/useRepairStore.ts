@@ -19,6 +19,8 @@ export interface ChatMessage {
   content: string;
   createdAt: number;
   sources?: CopilotSource[];
+  model?: string;
+  deep?: boolean;
 }
 
 export interface CopilotSource {
@@ -113,6 +115,8 @@ interface RepairState extends DeviceSession {
   deviceId: string;
   savedSessions: Record<string, DeviceSession>;
   isCopilotThinking: boolean;
+  deepThinking: boolean;
+  setDeepThinking: (on: boolean) => void;
 
   hudOpen: boolean;
   hudTab: HudTab;
@@ -219,6 +223,8 @@ export const useRepairStore = create<RepairState>()(
       ...newSession(DEFAULT_DEVICE),
       savedSessions: {},
       isCopilotThinking: false,
+      deepThinking: false,
+      setDeepThinking: (deepThinking) => set({ deepThinking }),
       hudOpen: true,
       hudTab: "meter",
       appMode: "repair",

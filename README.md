@@ -79,6 +79,7 @@ With up to 128 GB of unified memory, Strix Halo can also keep the chat, vision a
 *   **Zero-Trust Edge Inference:** Runs 100% offline using local LLMs, ensuring customer data privacy and eliminating cloud compute costs.
 *   **AMD Lemonade Ready:** Switch the whole AI stack (chat, vision and embeddings) to Lemonade with `.env.lemonade.example` and a setup script, including model load/unload for the Repair / Ingest switch. Targets Ryzen AI NPU + iGPU (Hybrid) and Radeon GPUs with ROCm or Vulkan; Ollama (`qwen2.5:7b`) remains available for other hardware.
 *   **Streaming Bench Chat:** Large, high-contrast chat built for use mid-repair. Answers stream in as they are generated, with live agent status ("Triaging issue…", "Searching schematics…") and cited manual excerpts.
+*   **Deep Thinking Toggle:** A **Deep** button next to the chat box sends the next questions to a stronger model (`qwen3:8b` by default). About 10 seconds per answer normally, 30–50 seconds with Deep on, for hard faults that need a more thorough answer.
 *   **Multimeter HUD & Diode Testing:** Log readings from any meter with large touch targets (test point, mode, value, optional expected range). Readings are flagged in/out of range and sent to the copilot, so you can ask "Is this reading bad?" or "What should I check next?".
 *   **Device Profiles:** Full profiles (screw maps, iFixit-sourced notes) for PlayStation 5 and Xbox Series X, starter profiles for PlayStation 4, Xbox Series S, Xbox One, Nintendo Switch and Switch 2, iPhone, Google Pixel, Samsung Galaxy S, iPad, Android tablets, MacBook and Windows laptops, plus any other device by name. Switching devices keeps a separate session for each, so you can flip between benches and pick up where you left off.
 *   **Repair Procedures and 2D Screw Maps:** Choose the repair (no-power diagnosis, fan cleaning, APU repaste, optical drive, SSD access). Each step shows a 2D layout of that stage with only the screws that step removes, colour-coded by length. Tap screws as they come out; the next step unlocks when they're all out.
@@ -207,6 +208,10 @@ ollama pull nomic-embed-text
 ```
 ```bash
 ollama pull qwen3-vl:4b-instruct
+```
+Optionally, pull the model used by the **Deep** button (~5.2 GB):
+```bash
+ollama pull qwen3:8b
 ```
 Use the `-instruct` tag: the plain `qwen3-vl:4b` tag is the reasoning variant, which thinks for thousands of tokens before transcribing a page.
 Check that Ollama is serving it:
@@ -573,7 +578,10 @@ All settings live in `.env` (read by Docker Compose) or as environment variables
 | `LLM_TEMPERATURE` | `0.2` | Sampling temperature |
 | `LLM_API_KEY` | `lemonade` | Sent to OpenAI-compatible servers; set it to your `LEMONADE_API_KEY` if you enabled one |
 | `LLM_JSON_MODE` | `true` | Request JSON output for triage; set `false` if the server rejects `response_format` |
-| `LLM_ENABLE_THINKING` | `false` | Lemonade only: allow reasoning models (Qwen3) to think before answering. Slower |
+| `LLM_ENABLE_THINKING` | `false` | Let a reasoning model (Qwen3) used as the main chat model think before answering. Slower |
+| `DEEP_MODEL` | `qwen3:8b` | Model used when **Deep** is on in the chat. Lemonade: `Qwen3-8B-GGUF`. On machines with more memory, use a larger model |
+| `DEEP_THINKING` | `false` | Let the deep model reason before answering. On an 8B model this made answers about 4× slower without making them better; worth trying with larger models |
+| `DEEP_NUM_CTX` | `12288` | Ollama only: context window for the deep model |
 | `LLM_KEEP_ALIVE` | `30m` | Ollama only: how long the model stays loaded between requests |
 | `LLM_NUM_CTX` | `8192` | Ollama only: context window. Lemonade sizes the context itself (`lemonade config set ctx_size=…`) |
 | `EMBED_PROVIDER` | `ollama` | `lemonade`, `ollama` or `openai`. Changing it requires `python ingest.py --reset` |
@@ -772,6 +780,8 @@ Agents are registered in `backend/agents/__init__.py`. Nothing in `graph.py` nee
 | Chat says *"Ingest mode is on"* | Switch the header toggle back to **Repair** |
 | Schematic pages stay "Queued" | Pages are only read in **Ingest** mode. Check `docker compose logs backend` for vision errors |
 | A page fails with *"model not found"* | Pull the vision model: `ollama pull qwen3-vl:4b-instruct` |
+| Deep answers fail with *"model not found"* | Pull the deep model: `ollama pull qwen3:8b`, or set `DEEP_MODEL` to a model you have |
+| The first answer after switching Deep on or off is slow | Both models don't fit in a 6 GB GPU at once, so Ollama swaps them (about 15 seconds) |
 | Pages take many minutes | Make sure `VISION_MODEL` is the `-instruct` tag, untick **Dense sheet**, or lower `VISION_MAX_SIDE` |
 | Vision model misreads small text | Re-upload with **Dense sheet**, or correct the page in **Extracted text** |
 | Upload rejected as too large | Raise `UPLOAD_MAX_MB` and restart the backend |

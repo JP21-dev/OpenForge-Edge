@@ -121,9 +121,9 @@ def _format_context(docs: list[dict], numbered: bool = True) -> str:
     return "\n".join(lines)
 
 
-def _value_covered(question: str, context: str, readings: str, references: str) -> bool:
+def _value_covered(question: str, context: str, readings: str, references: str, deep: bool = False) -> bool:
     try:
-        raw = get_llm(json_mode=True).with_config(tags=["internal"]).invoke(
+        raw = get_llm(json_mode=True, deep=deep).with_config(tags=["internal"]).invoke(
             [HumanMessage(COVERAGE_CHECK.format(context=context, readings=readings, references=references, question=question))]
         )
         match = re.search(r"\{.*\}", raw.content, re.DOTALL)
@@ -140,7 +140,8 @@ def respond_node(state: AgentState) -> dict:
     readings = _format_readings(session.get("readings", []))
     references = _format_references(state.get("references", []))
 
-    if VALUE_QUESTION.search(question) and not _value_covered(question, context, readings, references):
+    deep = bool(session.get("deep"))
+    if VALUE_QUESTION.search(question) and not _value_covered(question, context, readings, references, deep):
         return {
             "messages": [AIMessage(NOT_COVERED)],
             "reply": NOT_COVERED,
@@ -156,7 +157,7 @@ def respond_node(state: AgentState) -> dict:
         references=references,
         context=context,
     )
-    answer = get_llm().invoke([SystemMessage(system), *state["messages"]])
+    answer = get_llm(deep=deep).invoke([SystemMessage(system), *state["messages"]])
     return {
         "messages": [AIMessage(answer.content)],
         "reply": answer.content,

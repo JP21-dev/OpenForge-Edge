@@ -24,6 +24,9 @@ class Settings:
     llm_api_key: str = os.getenv("LLM_API_KEY", "lemonade")
     llm_json_mode: bool = _flag(os.getenv("LLM_JSON_MODE", "true"))
     llm_enable_thinking: bool = _flag(os.getenv("LLM_ENABLE_THINKING", "false"))
+    deep_model: str = os.getenv("DEEP_MODEL", "qwen3:8b")
+    deep_thinking: bool = _flag(os.getenv("DEEP_THINKING", "false"))
+    deep_num_ctx: int = int(os.getenv("DEEP_NUM_CTX", "12288"))
 
     embed_provider: str = os.getenv("EMBED_PROVIDER", "ollama")
     embed_base_url: str = os.getenv("EMBED_BASE_URL", "http://localhost:11434")

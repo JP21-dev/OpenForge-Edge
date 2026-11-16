@@ -41,6 +41,7 @@ def status() -> dict:
         "mode": mode,
         "active_model": _models(mode)[2],
         "chat_model": settings.llm_model,
+        "deep_model": settings.deep_model,
         "vision_model": settings.vision_model,
         "loading": _loading,
     }

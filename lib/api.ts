@@ -8,6 +8,7 @@ export interface ModeStatus {
   mode: AppMode;
   active_model: string;
   chat_model: string;
+  deep_model: string;
   vision_model: string;
   loading: string | null;
 }

@@ -11,8 +11,9 @@ const OUTCOMES: { id: RepairOutcome; label: string; tone: string }[] = [
   { id: "parked", label: "Parked", tone: "bg-bench-accent text-black" },
 ];
 
-export function FinishRepairDialog({ onClose }: { onClose: () => void }) {
+export function FinishRepairDialog({ onClose, prompted = false }: { onClose: () => void; prompted?: boolean }) {
   const store = useRepairStore();
+  const coverage = store.coverage;
   const firstQuestion = store.messages.find((m) => m.role === "technician")?.content ?? "";
   const [outcome, setOutcome] = useState<RepairOutcome>("fixed");
   const [symptom, setSymptom] = useState(firstQuestion.slice(0, 500));
@@ -27,7 +28,7 @@ export function FinishRepairDialog({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setError("");
     try {
-      await api.saveRepair({
+      const saved = await api.saveRepair({
         device_model: store.deviceModel,
         board_revision: store.boardRevision,
         symptom,
@@ -47,6 +48,13 @@ export function FinishRepairDialog({ onClose }: { onClose: () => void }) {
         steps: store.diagnosticSteps.map((s) => ({ title: s.title, status: s.status })),
         message_count: store.messages.filter((m) => m.role !== "system").length,
       });
+      if (saved.patterns?.length) {
+        alert(
+          `Recurring pattern detected for ${store.deviceModel}:\n\n` +
+            saved.patterns.map((p) => `${p.root_cause} (${p.count} repairs)`).join("\n") +
+            "\n\nThe copilot will now suggest it on matching symptoms. Review it in the History tab.",
+        );
+      }
       store.resetSession();
       onClose();
     } catch (err) {
@@ -73,6 +81,12 @@ export function FinishRepairDialog({ onClose }: { onClose: () => void }) {
             <X className="size-7" />
           </button>
         </div>
+        {prompted && (
+          <p className="rounded-xl border-2 border-bench-accent/60 bg-bench-accent/10 p-3 text-lg">
+            That was the last step. Save the outcome so the next {store.deviceModel} repair can learn from it
+            {coverage ? ` (${coverage.counts.repairs} repair${coverage.counts.repairs === 1 ? "" : "s"} saved so far)` : ""}.
+          </p>
+        )}
         <p className="text-lg text-bench-muted">
           Saved to this bench&apos;s repair history for {store.deviceModel}
           {store.boardRevision && ` ${store.boardRevision}`}, with {store.readings.length} logged readings. The copilot

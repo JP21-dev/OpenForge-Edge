@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, BookmarkPlus, Cog, FileStack, Gauge, History, Plus, Ruler, Trash2, X } from "lucide-react";
+import { Activity, BookmarkPlus, Database, Cog, FileStack, Gauge, History, Plus, Ruler, Trash2, X } from "lucide-react";
 import {
   METER_UNITS,
   findReference,
@@ -12,7 +12,8 @@ import {
   type MeterReading,
   type ReadingStatus,
 } from "@/store/useRepairStore";
-import { ReferencePanel, SchematicsPanel, HistoryPanel } from "@/components/HudPanels";
+import { ReferencePanel, SchematicsPanel, HistoryPanel, loadReferences } from "@/components/HudPanels";
+import { api } from "@/lib/api";
 import { ScrewMapPanel } from "@/components/ScrewMap";
 
 const TABS: { id: HudTab; label: string; icon: typeof Gauge }[] = [
@@ -181,7 +182,15 @@ function MultimeterPanel() {
                     {r.mode}
                     {r.expected && ` · ref ${r.expected.min}–${r.expected.max} ${r.unit}`}
                   </span>
-                  <span className={`shrink-0 font-bold ${st.text}`}>{st.label}</span>
+                  <span className={`flex shrink-0 items-center gap-1 font-bold ${st.text}`}>
+                    {r.saved && (
+                      <Database
+                        className="size-4 text-bench-muted"
+                        aria-label={r.knownGood ? "saved to the bench log and known-good database" : "saved to the bench log"}
+                      />
+                    )}
+                    {st.label}
+                  </span>
                 </div>
               </div>
               <button
@@ -207,6 +216,41 @@ function MultimeterPanel() {
   );
 }
 
+async function recordReading(id: string, knownGood: boolean): Promise<boolean> {
+  const s = useRepairStore.getState();
+  const r = s.readings.find((x) => x.id === id);
+  if (!r) return false;
+  const step = s.diagnosticSteps[s.currentStepIndex];
+  try {
+    await api.logReading({
+      device_model: s.deviceModel,
+      board_revision: s.boardRevision,
+      session_id: s.sessionId,
+      step: step?.title ?? "",
+      test_point: r.testPoint,
+      mode: r.mode,
+      value: r.value,
+      expected_min: r.expected?.min ?? null,
+      expected_max: r.expected?.max ?? null,
+      status: readingStatus(r),
+    });
+    if (knownGood && r.value !== null) {
+      await api.addCaptureSample({
+        device_model: s.deviceModel,
+        board_revision: s.boardRevision,
+        board_label: `session ${s.sessionId.slice(0, 8)}`,
+        test_point: r.testPoint,
+        mode: r.mode,
+        value: r.value,
+      });
+      loadReferences();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function parseNumber(text: string): number | null {
   const n = Number.parseFloat(text.trim().replace(",", "."));
   return Number.isFinite(n) ? n : null;
@@ -215,7 +259,10 @@ function parseNumber(text: string): number | null {
 function LogReadingForm({ onDone }: { onDone: () => void }) {
   const readings = useRepairStore((s) => s.readings);
   const addReading = useRepairStore((s) => s.addReading);
+  const markReadingSaved = useRepairStore((s) => s.markReadingSaved);
   const references = useRepairStore((s) => s.references);
+  const coverage = useRepairStore((s) => s.coverage);
+  const [knownGood, setKnownGood] = useState(false);
   const [testPoint, setTestPoint] = useState("");
   const [mode, setMode] = useState<MeterMode>(readings[0]?.mode ?? "DCV");
   const [value, setValue] = useState("");
@@ -245,13 +292,15 @@ function LogReadingForm({ onDone }: { onDone: () => void }) {
     if (!canSave) return;
     const lo = parseNumber(min);
     const hi = parseNumber(max);
-    addReading({
+    const entry = addReading({
       testPoint: testPoint.trim(),
       mode,
       value: parsedValue,
       unit,
       expected: lo !== null && hi !== null ? { min: Math.min(lo, hi), max: Math.max(lo, hi) } : undefined,
+      knownGood,
     });
+    recordReading(entry.id, knownGood).then((ok) => ok && markReadingSaved(entry.id));
     onDone();
   };
 
@@ -340,6 +389,17 @@ function LogReadingForm({ onDone }: { onDone: () => void }) {
           <input value={max} onChange={(e) => setMax(e.target.value)} inputMode="decimal" placeholder="max" aria-label="Expected maximum" className={`${field} font-mono`} />
         </div>
       </fieldset>
+
+      <label className={`flex items-start gap-3 rounded-xl p-3 text-lg ${coverage && coverage.level !== "ok" ? "border-2 border-bench-accent/60 bg-bench-accent/10" : ""}`}>
+        <input type="checkbox" checked={knownGood} onChange={(e) => setKnownGood(e.target.checked)} className="mt-1 size-6 shrink-0" />
+        <span>
+          <span className="font-semibold">Board is known-good</span>
+          <span className="block text-base text-bench-muted">
+            Also save this value to the known-good database for this board revision.
+            {coverage && coverage.level !== "ok" && " This device has little reference data, so every good-board value helps."}
+          </span>
+        </span>
+      </label>
 
       <div className="flex gap-2">
         <button

@@ -172,9 +172,14 @@ def search_history(query: str, device: str | None, k: int = 3, rev: str | None =
         score = round(1 - dist, 3)
         if score < settings.rag_min_score:
             continue
+        if meta.get("kind") == "pattern":
+            label = f"Recurring pattern · {meta.get('count', '?')} repairs" + (" · verified" if meta.get("status") == "verified" else "")
+        else:
+            label = f"Past repair {meta.get('date', '')} · {meta.get('outcome', '')}".strip()
         docs.append(
             {
-                "source": f"Past repair {meta.get('date', '')} · {meta.get('outcome', '')}".strip(),
+                "source": label,
+                "pattern_id": meta.get("pattern_id"),
                 "page": None,
                 "text": re.sub(r"\s+", " ", text).strip(),
                 "score": score,

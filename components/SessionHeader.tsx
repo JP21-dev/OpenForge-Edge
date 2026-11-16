@@ -8,6 +8,7 @@ import { DevicePicker, ProcedurePicker } from "@/components/DevicePicker";
 import { ModeToggle } from "@/components/ModeToggle";
 import { FinishRepairDialog } from "@/components/FinishRepairDialog";
 import { FailStepDialog } from "@/components/FailStepDialog";
+import { RecordingPill } from "@/components/CoverageBanner";
 
 export function SessionHeader() {
   const schematic = useRepairStore((s) => s.activeSchematic);
@@ -20,7 +21,10 @@ export function SessionHeader() {
   const resetSession = useRepairStore((s) => s.resetSession);
   const appMode = useRepairStore((s) => s.appMode);
 
-  const [finishing, setFinishing] = useState(false);
+  const [finishingManual, setFinishing] = useState(false);
+  const finishPrompt = useRepairStore((s) => s.finishPrompt);
+  const setFinishPrompt = useRepairStore((s) => s.setFinishPrompt);
+  const finishing = finishingManual || finishPrompt;
   const [failing, setFailing] = useState(false);
 
   return (
@@ -54,6 +58,7 @@ export function SessionHeader() {
       )}
 
       <div className="ml-auto flex items-center gap-2 md:ml-0">
+        <RecordingPill />
         <ModeToggle />
         {appMode === "repair" && (
           <>
@@ -74,7 +79,15 @@ export function SessionHeader() {
         </IconButton>
       </div>
 
-      {finishing && <FinishRepairDialog onClose={() => setFinishing(false)} />}
+      {finishing && (
+        <FinishRepairDialog
+          prompted={finishPrompt && !finishingManual}
+          onClose={() => {
+            setFinishing(false);
+            setFinishPrompt(false);
+          }}
+        />
+      )}
       {failing && <FailStepDialog onClose={() => setFailing(false)} />}
     </header>
   );

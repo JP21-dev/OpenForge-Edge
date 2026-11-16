@@ -23,6 +23,10 @@ Built to run entirely on local edge devices, OpenForge Edge removes the reliance
 *   **Multimeter HUD & Diode Testing:** Log readings from any meter with large touch targets (test point, mode, value, optional expected range). Readings are flagged in/out of range and sent to the copilot, so you can ask "Is this reading bad?" or "What should I check next?".
 *   **Device Profiles:** PlayStation 5 and Xbox Series X built in, plus any other device by name. Switching devices keeps a separate session for each, so you can flip between benches and pick up where you left off.
 *   **Repair Procedures and 2D Screw Maps:** Choose the repair (no-power diagnosis, fan cleaning, APU repaste, optical drive, SSD access). Each step shows a 2D layout of that stage with only the screws that step removes, colour-coded by length. Tap screws as they come out; the next step unlocks when they're all out.
+*   **Known-Good Capture:** A guided checklist for measuring a working board, test point by test point. Every value is saved to the local database, and values from several boards are combined into the reference range. Import your own test point lists and expected values (CSV or JSON) from your boardview software.
+*   **Step Photos:** Photograph each teardown stage and tap to place its screws on the photo, replacing the approximate drawing with an exact map.
+*   **Automatic Recurring Patterns:** When three or more fixed repairs share a similar symptom and root cause, they are promoted to a recurring pattern. The copilot names it first on matching symptoms and the failed-step panel suggests it.
+*   **Data Coverage Prompts:** When a device or board revision has little or no saved data, the Bench UI says so, asks for known-good captures and finished repairs, and shows a "Recording" indicator so the tech knows what is being saved.
 *   **Failed-Step Suggestions:** When a step fails (the red ✕), the copilot suggests what to do next: built-in follow-ups for that step plus suggestions drawn from the manuals, schematics, readings and past repairs. Pick the ones you want and they are inserted into the repair.
 *   **Local RAG for Repair Manuals:** Ingest schematic PDFs, Markdown notes and JSON measurement files into ChromaDB with local `nomic-embed-text` embeddings. Answers cite the excerpts they used, and questions asking for a voltage, reading or resistance the knowledge base doesn't contain get "not in the knowledge base yet" instead of a guess.
 *   **Schematic Vision Ingest:** Upload schematic PDFs or phone photos of schematics in the Bench UI. A local vision model (`qwen3-vl:4b-instruct`) reads every page into rails, components, connectors and test points, which become searchable. Each page can be checked and corrected against the original image.
@@ -93,6 +97,8 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 │   ├── reference.py        Known-good reference values
 │   ├── history.py          Repair history
 │   ├── suggest.py          Next-step suggestions after a failed step
+│   ├── capture.py          Known-good capture, test point import, coverage, bench reading log
+│   ├── photos.py           Step photos and screw marker positions
 │   ├── db.py               MongoDB connection
 │   ├── llm.py, config.py, state.py
 │   └── requirements.txt
@@ -327,6 +333,56 @@ Press the **flag** button in the header to finish a job: pick the outcome (fixed
 
 ---
 
+## 🧪 Building Your Own Board Database
+
+Accurate diagnosis needs accurate values. The public notes get you started; the values you measure on your own bench are what make answers trustworthy. Everything below is stored in MongoDB on this machine and never committed to git.
+
+### What gets recorded
+The **Recording** pill in the header is always on. It turns amber with "data needed" when the current device or revision has little data. Clicking it opens the capture checklist.
+
+| Saved | When | Used for |
+|---|---|---|
+| Every logged meter reading | When you press Save in the Meter tab (a database icon appears on the reading) | The "often measured" test points in the capture checklist |
+| Known-good values | Capture checklist, or "Board is known-good" ticked when logging a reading | Reference ranges for the copilot and the Meter tab |
+| Finished repairs | Flag button, or automatically prompted after the last step | Repair history and recurring patterns |
+| Step photos and screw positions | Screws tab | Exact screw maps for that device and step |
+
+### Low-data prompts
+When you open a device or set a board revision, the backend checks how much data exists (`GET /api/coverage`). Below 10 reference values or 5 saved repairs (`COVERAGE_MIN_REFERENCES`, `COVERAGE_MIN_REPAIRS`), a banner at the top of the chat shows the counts and asks for known-good captures and finished repairs. The **Board is known-good** checkbox in the reading form is highlighted for that device.
+
+### Known-good capture
+1. Set the device and board revision in the header, then click **Recording** (or **Capture known-good values** in the banner).
+2. Enter the board's serial number or a label. Each board is counted once per test point; re-entering a value overwrites it.
+3. Work down the checklist: probe, type the value, press Enter. The next point comes up automatically.
+
+The checklist combines generic starting points for the device, test points you added or imported, test points techs often measure during repairs, and anything already captured. After each save the reference range is rebuilt from every good board measured, widened by 5 %. A range you typed or imported is never overwritten by captures; captures are stored alongside it, and a capture outside it shows a warning in case the board is not actually good.
+
+### Importing test points from your boardview
+Export or type the test points and expected values you want into a CSV (comma, semicolon or tab separated) or JSON file, then use **Import test points** in the capture screen. Recognised columns (case-insensitive):
+
+| Column | Also accepted | Meaning |
+|---|---|---|
+| `test_point` | `net`, `name`, `point` | Rail, net or designator |
+| `mode` | `type` | `DCV`, `DIODE`, `OHM`, `ACV`, `CONT`, `AMP` (or `V`, `diode`, `ohm`…) |
+| `expected` | `value`, `typical` | Expected value; becomes a ±5 % range |
+| `min`, `max` | `expected_min`, `expected_max` | Explicit range instead of `expected` |
+| `hint` | `location`, `note`, `component` | Where and how to measure |
+
+```csv
+net;mode;expected;location
+PP5V0_S5;diode;0,452;C7120 near the USB port
+```
+
+Only values are imported, never images. Data from paid boardview tools such as XZZ is licensed for your own bench: it stays in this machine's database, is not part of the repository, and should not be shown in public demos.
+
+### Recurring patterns
+Each time a repair is saved as **Fixed** with a root cause, the backend compares it with the other fixed repairs on the same device. When at least `PATTERN_MIN_REPAIRS` (default 3) have a similar symptom and a similar root cause (cosine similarity of their embeddings ≥ `PATTERN_SIMILARITY`, default 0.78), they become a recurring pattern:
+*   The copilot gets it as a "Recurring pattern · N repairs" excerpt and names it first on matching symptoms.
+*   The failed-step panel lists it under **From your repair history**, pre-selected.
+*   The History tab lists all patterns. **Verify** marks one as checked by a tech; **Dismiss** stops it being suggested. Patterns are rebuilt as repairs are added or deleted, but verified and dismissed decisions are kept.
+
+---
+
 ## ✈️ Running Fully Offline
 
 Everything runs locally once the models and Docker images are downloaded. Before taking the bench offline:
@@ -398,6 +454,9 @@ All settings live in `.env` (read by Docker Compose) or as environment variables
 | `VISION_MAX_SIDE` | `1600` | Longest side, in pixels, of the image sent to the vision model |
 | `VISION_MAX_TOKENS` | `1800` | Maximum length of one page transcription |
 | `UPLOAD_MAX_MB` | `100` | Maximum size of one uploaded file |
+| `PATTERN_MIN_REPAIRS` | `3` | Fixed repairs with a similar symptom and cause needed to promote a recurring pattern |
+| `PATTERN_SIMILARITY` | `0.78` | How similar (0–1) symptoms and root causes must be to count as the same pattern |
+| `COVERAGE_MIN_REFERENCES` / `COVERAGE_MIN_REPAIRS` | `10` / `5` | Below these counts the Bench UI asks for more data |
 | `RAG_TOP_K` | `4` | Maximum excerpts retrieved per question |
 | `RAG_MIN_SCORE` | `0.6` | Minimum similarity (0–1) for an excerpt to be used; raise it if answers pull in unrelated sections |
 | `CHROMA_VERSION` / `CHROMA_COLLECTION` | `1.5.9` / `repair_manuals` | ChromaDB image tag and collection name |
@@ -511,7 +570,16 @@ docker compose exec backend python ingest.py --reset
 | `DELETE` | `/api/reference/{id}` | Delete a reference value |
 | `GET` | `/api/boards?device_model=` | Board revisions seen for a device |
 | `POST` | `/api/steps/suggest` | Suggest next steps after a failed step: `device_model`, `board_revision`, `procedure`, `failed_step`, `note`, `completed_steps`, `readings` |
-| `GET` / `POST` | `/api/repairs` | List or save repair history |
+| `GET` / `POST` | `/api/repairs` | List or save repair history (the save response lists any recurring patterns it created) |
+| `GET` | `/api/patterns?device_model=` | Recurring patterns |
+| `POST` | `/api/patterns/{id}/status` | `{"status": "verified" \| "dismissed" \| "auto"}` |
+| `GET` | `/api/capture/plan` | Capture checklist with measured and reference values (`device_model`, `board_revision`, `board_label`) |
+| `POST` | `/api/capture/samples` | Save one known-good value and rebuild the reference range |
+| `POST` | `/api/capture/points`, `/api/capture/import` | Add one test point, or import a list |
+| `GET` | `/api/coverage` | How much data exists for a device and revision |
+| `POST` | `/api/readings` | Log a bench reading |
+| `GET` / `POST` | `/api/step-photos` | List or upload step photos (`file`, `device_model`, `step_id`) |
+| `PUT` | `/api/step-photos/{id}/markers` | Save screw positions on a photo |
 | `DELETE` | `/api/repairs/{id}` | Delete a repair record |
 
 Request body for both chat endpoints:

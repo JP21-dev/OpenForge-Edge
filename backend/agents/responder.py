@@ -40,6 +40,7 @@ The reference excerpts are ordered by relevance. Answer the technician's exact s
 Only state part numbers, designators, values, screw counts or tool sizes that appear in the excerpts, the known-good reference values or the logged readings. If they do not cover the question, say it is not in the knowledge base yet instead of guessing.
 Use the logged meter readings when relevant. "This reading" means the most recent one. A reading marked OUT OF RANGE is a fault lead: name it and say what to check next. Judge a reading in or out of range only from its logged expected range, a known-good reference value, or a value stated in the excerpts. Known-good reference values were measured or confirmed by this shop and outrank excerpts.
 Excerpts labelled "Past repair" are this shop's earlier jobs on the same device: mention a matching one as a lead ("a previous board with this symptom had …"), never as proof.
+Excerpts labelled "Recurring pattern" summarise several fixed repairs with the same symptom and cause on this bench: when one matches, name it early as the most likely lead and say how many repairs it is based on.
 Excerpts from schematics were transcribed by a vision model: when you rely on one, tell the technician which page to confirm it on.
 A value for one rail, pin or part never answers a question about a different rail, pin or part.
 Example: the excerpts give the 5 V USB rail, and the technician asks for the memory rail voltage. Correct answer: "The memory rail voltage isn't in the knowledge base yet. 1. Compare against a known-good board or your boardview." Wrong answer: "5 V".
@@ -84,7 +85,9 @@ def _format_references(refs: list[dict]) -> str:
         rev = f" [{r['board_rev']}]" if r.get("board_rev") else ""
         source = f" (source: {r['source']})" if r.get("source") else ""
         note = f" — {r['note']}" if r.get("note") else ""
-        lines.append(f"- {r['test_point']}{rev} ({r['mode']}): {r['expected_min']}–{r['expected_max']} {r['unit']}{source}{note}")
+        measured = r.get("measured")
+        seen = f"; measured on {measured['boards']} good board(s): {measured['min']}–{measured['max']} {r['unit']}" if measured else ""
+        lines.append(f"- {r['test_point']}{rev} ({r['mode']}): {r['expected_min']}–{r['expected_max']} {r['unit']}{source}{seen}{note}")
     return "\n".join(lines)
 
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, FileText, History, Loader2, Mic, SendHorizonal, Wrench, ZoomIn } from "lucide-react";
 import { selectCurrentStep, selectProcedure, useRepairStore, type ChatMessage } from "@/store/useRepairStore";
 import { askCopilot } from "@/lib/copilot";
+import { CoverageBanner } from "@/components/CoverageBanner";
 
 const QUICK_PROMPTS = [
   "What do I measure next?",
@@ -75,6 +76,7 @@ export function ChatPanel() {
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Copilot chat">
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-6 md:px-8" aria-live="polite">
+        <CoverageBanner />
         {messages.map((m) => (
           <MessageBubble key={m.id} message={m} />
         ))}

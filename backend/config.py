@@ -43,6 +43,10 @@ class Settings:
     uploads_dir: str = os.getenv("UPLOADS_DIR", "./uploads")
     upload_max_mb: int = int(os.getenv("UPLOAD_MAX_MB", "100"))
     history_collection: str = os.getenv("HISTORY_COLLECTION", "repair_history")
+    pattern_min_repairs: int = int(os.getenv("PATTERN_MIN_REPAIRS", "3"))
+    pattern_similarity: float = float(os.getenv("PATTERN_SIMILARITY", "0.78"))
+    coverage_min_references: int = int(os.getenv("COVERAGE_MIN_REFERENCES", "10"))
+    coverage_min_repairs: int = int(os.getenv("COVERAGE_MIN_REPAIRS", "5"))
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "4"))
     rag_min_score: float = float(os.getenv("RAG_MIN_SCORE", "0.6"))
 

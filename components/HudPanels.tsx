@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, CircleSlash, FileStack, Loader2, PauseCircle, Plus, Trash2 } from "lucide-react";
+import { BadgeCheck, CheckCircle2, CircleSlash, EyeOff, FileStack, Loader2, PauseCircle, Plus, Repeat, Trash2 } from "lucide-react";
 import { METER_UNITS, useRepairStore, type MeterMode } from "@/store/useRepairStore";
-import { api, type RepairRecord, type SchematicSummary } from "@/lib/api";
+import { api, type Pattern, type RepairRecord, type SchematicSummary } from "@/lib/api";
 
 const MODES: MeterMode[] = ["DCV", "ACV", "OHM", "DIODE", "CONT", "AMP"];
 
@@ -287,6 +287,7 @@ export function HistoryPanel() {
 
   return (
     <div className="space-y-4">
+      <PatternList />
       <p className="text-lg text-bench-muted">
         Past {deviceModel} repairs on this bench. Use the flag button in the header to save the current job here.
       </p>
@@ -320,5 +321,77 @@ export function HistoryPanel() {
         })}
       </ul>
     </div>
+  );
+}
+
+const PATTERN_TONE = {
+  verified: "border-bench-ok",
+  auto: "border-bench-accent",
+  dismissed: "border-bench-border opacity-60",
+} as const;
+
+function PatternList() {
+  const deviceModel = useRepairStore((s) => s.deviceModel);
+  const [items, setItems] = useState<Pattern[]>([]);
+
+  const refresh = useCallback(() => {
+    api.listPatterns(deviceModel).then(setItems).catch(() => setItems([]));
+  }, [deviceModel]);
+
+  useEffect(refresh, [refresh]);
+
+  const setStatus = async (p: Pattern, status: Pattern["status"]) => {
+    await api.setPatternStatus(p.id, status).catch(() => undefined);
+    refresh();
+  };
+
+  return (
+    <section className="space-y-3">
+      <h3 className="flex items-center gap-2 text-lg font-bold uppercase tracking-wider text-bench-muted">
+        <Repeat className="size-5 text-bench-accent" aria-hidden />
+        Recurring patterns
+      </h3>
+      {!items.length && (
+        <p className="text-base text-bench-muted">
+          None yet. When 3 or more fixed repairs share a similar symptom and root cause, they are promoted to a pattern automatically and the
+          copilot starts suggesting it.
+        </p>
+      )}
+      <ul className="space-y-2">
+        {items.map((p) => (
+          <li key={p.id} className={`space-y-1 rounded-xl border-l-8 bg-bench-raised p-4 ${PATTERN_TONE[p.status]}`}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xl font-semibold">{p.root_cause}</span>
+              <span className="shrink-0 font-mono text-base text-bench-accent">{p.count} repairs</span>
+            </div>
+            <p className="text-lg text-bench-muted">Symptom: {p.symptom}</p>
+            {p.fix && <p className="text-lg text-bench-muted">Fix: {p.fix}</p>}
+            <p className="font-mono text-sm text-bench-muted">
+              {p.status === "verified" ? "verified" : p.status === "dismissed" ? "dismissed: not suggested" : "auto-detected"} · last{" "}
+              {p.last_seen.slice(0, 10)}
+              {p.revisions.filter((r) => r !== "any").length > 0 && ` · ${p.revisions.filter((r) => r !== "any").join(", ")}`}
+            </p>
+            <div className="flex gap-2 pt-1">
+              {p.status !== "verified" && (
+                <button onClick={() => setStatus(p, "verified")} className="flex h-10 items-center gap-1 rounded-lg bg-bench-bg px-3 text-base font-semibold text-bench-ok">
+                  <BadgeCheck className="size-5" aria-hidden />
+                  Verify
+                </button>
+              )}
+              {p.status !== "dismissed" ? (
+                <button onClick={() => setStatus(p, "dismissed")} className="flex h-10 items-center gap-1 rounded-lg bg-bench-bg px-3 text-base font-semibold text-bench-muted">
+                  <EyeOff className="size-5" aria-hidden />
+                  Dismiss
+                </button>
+              ) : (
+                <button onClick={() => setStatus(p, "auto")} className="flex h-10 items-center gap-1 rounded-lg bg-bench-bg px-3 text-base font-semibold text-bench-muted">
+                  Restore
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

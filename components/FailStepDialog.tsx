@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Check, ListPlus, Loader2, RefreshCw, X } from "lucide-react";
+import { Bot, Check, ListPlus, Loader2, RefreshCw, Repeat, X } from "lucide-react";
 import { readingStatus, selectCurrentStep, selectProcedure, useRepairStore } from "@/store/useRepairStore";
 import { failSuggestions, type StepSuggestion } from "@/lib/devices";
 import { api, type SuggestedStep } from "@/lib/api";
 
 interface Option extends StepSuggestion {
   key: string;
-  origin: "built-in" | "copilot";
+  origin: "built-in" | "copilot" | "pattern";
   why?: string;
 }
 
@@ -23,6 +23,7 @@ export function FailStepDialog({ onClose }: { onClose: () => void }) {
   const builtIn: Option[] = (step ? failSuggestions(step) : []).map((s, i) => ({ ...s, key: `b${i}`, origin: "built-in" }));
   const [note, setNote] = useState("");
   const [copilot, setCopilot] = useState<Option[]>([]);
+  const [patterns, setPatterns] = useState<Option[]>([]);
   const [selected, setSelected] = useState<string[]>(builtIn.length ? [builtIn[0].key] : []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -64,6 +65,15 @@ export function FailStepDialog({ onClose }: { onClose: () => void }) {
           .filter((x: SuggestedStep) => !builtIn.some((b) => same(b.title, x.title)))
           .map((x: SuggestedStep, i: number) => ({ title: x.title, detail: x.detail, why: x.why, key: `c${Date.now()}-${i}`, origin: "copilot" as const }));
         setCopilot(options);
+        const fromPatterns = (res.patterns ?? []).map((x: SuggestedStep, i: number) => ({
+          title: x.title,
+          detail: x.detail,
+          why: x.why,
+          key: `p${i}-${x.title}`,
+          origin: "pattern" as const,
+        }));
+        setPatterns(fromPatterns);
+        if (fromPatterns.length) setSelected((prev) => [...new Set([...prev, fromPatterns[0].key])]);
         if (!options.length) setError("The copilot had no further suggestions.");
       } catch (err) {
         if ((err as Error).name !== "AbortError") setError((err as Error).message);
@@ -81,7 +91,7 @@ export function FailStepDialog({ onClose }: { onClose: () => void }) {
 
   if (!step) return null;
 
-  const all = [...builtIn, ...copilot];
+  const all = [...patterns, ...builtIn, ...copilot];
   const chosen = all.filter((o) => selected.includes(o.key));
   const toggle = (key: string) => setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
@@ -127,6 +137,18 @@ export function FailStepDialog({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           </label>
+
+          {patterns.length > 0 && (
+            <section className="space-y-2">
+              <h3 className="flex items-center gap-2 text-lg font-bold uppercase tracking-wider text-bench-ok">
+                <Repeat className="size-5" aria-hidden />
+                From your repair history
+              </h3>
+              {patterns.map((o) => (
+                <OptionRow key={o.key} option={o} checked={selected.includes(o.key)} onToggle={() => toggle(o.key)} />
+              ))}
+            </section>
+          )}
 
           {builtIn.length > 0 && (
             <section className="space-y-2">

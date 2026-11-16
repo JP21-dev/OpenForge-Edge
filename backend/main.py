@@ -14,6 +14,8 @@ import knowledge
 import mode
 import reference
 import schematics
+import capture
+import photos
 import suggest
 from config import settings
 from graph import repair_graph
@@ -33,6 +35,9 @@ app.include_router(schematics.router)
 app.include_router(reference.router)
 app.include_router(history.router)
 app.include_router(suggest.router)
+app.include_router(capture.router)
+app.include_router(photos.router)
+app.include_router(history.patterns_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,6 +85,7 @@ class Source(BaseModel):
     score: float
     schematic_id: str | None = None
     board_rev: str | None = None
+    pattern_id: str | None = None
 
 
 class ChatResponse(BaseModel):

@@ -118,6 +118,77 @@ export interface SuggestInput {
   readings: RepairInput["readings"];
 }
 
+export interface MeasuredStats {
+  count: number;
+  boards: number;
+  min: number;
+  max: number;
+}
+
+export interface CapturePoint {
+  id: string | null;
+  test_point: string;
+  mode: MeterMode;
+  unit: string;
+  hint: string;
+  origin: string;
+  measured: MeasuredStats | null;
+  reference: { min: number; max: number; source: string } | null;
+  captured_on_board: boolean;
+}
+
+export interface CapturePlan {
+  device: string;
+  board_rev: string | null;
+  points: CapturePoint[];
+}
+
+export interface ImportRow {
+  test_point: string;
+  mode: MeterMode;
+  hint?: string;
+  expected?: number;
+  expected_min?: number;
+  expected_max?: number;
+}
+
+export interface Coverage {
+  device: string;
+  board_rev: string | null;
+  level: "none" | "low" | "ok";
+  counts: {
+    reference_values: number;
+    known_good_boards: number;
+    repairs: number;
+    schematics: number;
+    knowledge_chunks: number;
+    patterns: number;
+  };
+  targets: { reference_values: number; repairs: number };
+}
+
+export interface Pattern {
+  id: string;
+  device_model: string;
+  board_rev: string | null;
+  revisions: string[];
+  symptom: string;
+  root_cause: string;
+  fix: string;
+  parts: string;
+  count: number;
+  status: "auto" | "verified" | "dismissed";
+  last_seen: string;
+}
+
+export interface StepPhoto {
+  id: string;
+  step_id: string;
+  width: number;
+  height: number;
+  markers: Record<string, [number, number]>;
+}
+
 export class ApiError extends Error {}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -171,9 +242,47 @@ export const api = {
   listBoards: (deviceModel: string) => request<string[]>(`/api/boards${query({ device_model: deviceModel })}`),
 
   suggestSteps: (body: SuggestInput, signal?: AbortSignal) =>
-    request<{ steps: SuggestedStep[]; sources: { source: string }[] }>("/api/steps/suggest", { ...json("POST", body), signal }),
+    request<{ steps: SuggestedStep[]; patterns: SuggestedStep[]; sources: { source: string }[] }>("/api/steps/suggest", {
+      ...json("POST", body),
+      signal,
+    }),
 
-  saveRepair: (body: RepairInput) => request<RepairRecord>("/api/repairs", json("POST", body)),
+  capturePlan: (deviceModel: string, boardRevision: string, boardLabel: string) =>
+    request<CapturePlan>(`/api/capture/plan${query({ device_model: deviceModel, board_revision: boardRevision, board_label: boardLabel })}`),
+  addCaptureSample: (body: { device_model: string; board_revision: string; board_label: string; test_point: string; mode: MeterMode; value: number }) =>
+    request<{ saved: boolean; measured: MeasuredStats; reference: ReferenceValue; outside_reference: boolean }>("/api/capture/samples", json("POST", body)),
+  addCapturePoint: (body: { device_model: string; board_revision: string; test_point: string; mode: MeterMode; hint: string; source: string }) =>
+    request<{ ok: boolean }>("/api/capture/points", json("POST", body)),
+  deleteCapturePoint: (id: string) => request<{ deleted: string }>(`/api/capture/points/${id}`, { method: "DELETE" }),
+  importCapturePoints: (body: { device_model: string; board_revision: string; source: string; rows: ImportRow[] }) =>
+    request<{ added: number; updated: number; reference_values: number }>("/api/capture/import", json("POST", body)),
+  coverage: (deviceModel: string, boardRevision: string) =>
+    request<Coverage>(`/api/coverage${query({ device_model: deviceModel, board_revision: boardRevision })}`),
+  logReading: (body: {
+    device_model: string;
+    board_revision: string;
+    session_id: string;
+    step: string;
+    test_point: string;
+    mode: MeterMode;
+    value: number | null;
+    expected_min: number | null;
+    expected_max: number | null;
+    status: "ok" | "fault" | "unknown";
+  }) => request<{ saved: boolean; id: string }>("/api/readings", json("POST", body)),
+
+  listPatterns: (deviceModel: string) => request<Pattern[]>(`/api/patterns${query({ device_model: deviceModel })}`),
+  setPatternStatus: (id: string, status: Pattern["status"]) =>
+    request<Pattern>(`/api/patterns/${id}/status`, json("POST", { status })),
+
+  listStepPhotos: (deviceModel: string) => request<StepPhoto[]>(`/api/step-photos${query({ device_model: deviceModel })}`),
+  uploadStepPhoto: (form: FormData) => request<StepPhoto>("/api/step-photos", { method: "POST", body: form }),
+  saveStepMarkers: (id: string, markers: StepPhoto["markers"]) =>
+    request<StepPhoto>(`/api/step-photos/${id}/markers`, json("PUT", { markers })),
+  deleteStepPhoto: (id: string) => request<{ deleted: string }>(`/api/step-photos/${id}`, { method: "DELETE" }),
+  stepPhotoUrl: (id: string) => `${API_URL}/api/step-photos/${id}/image`,
+
+  saveRepair: (body: RepairInput) => request<RepairRecord & { patterns?: Pattern[] }>("/api/repairs", json("POST", body)),
   listRepairs: (deviceModel?: string) => request<RepairRecord[]>(`/api/repairs${query({ device_model: deviceModel })}`),
   deleteRepair: (id: string) => request<{ deleted: string }>(`/api/repairs/${id}`, { method: "DELETE" }),
 };

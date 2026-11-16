@@ -4,8 +4,7 @@ import { useState } from "react";
 import { Check, CheckCircle2, ChevronDown, CircleDashed, ExternalLink, Info, X } from "lucide-react";
 import { resolveStep, selectCurrentStep, selectDevice, selectProcedure, useRepairStore } from "@/store/useRepairStore";
 import { VIEW_BOX, screwKey, type DeviceView, type ScrewGroup, type Shape } from "@/lib/devices";
-
-const COLORS = ["#f5a524", "#22d3ee", "#e879f9", "#a3e635", "#fb7185", "#818cf8", "#facc15", "#34d399"];
+import { COLORS, StepVisual } from "@/components/StepVisual";
 
 const FILL: Record<string, string> = {
   body: "#11161c",
@@ -55,13 +54,22 @@ export function ScrewMapPanel() {
         {step.detail && <p className="text-lg text-bench-muted">{step.detail}</p>}
       </div>
 
-      {view ? (
-        <ViewDrawing view={view} groups={groups} removed={removed} onToggle={toggleScrew} />
-      ) : (
-        <div className="rounded-2xl border-2 border-dashed border-bench-border p-6 text-center text-lg text-bench-muted">
-          No layout drawing for {device.id === "custom" ? "this device yet" : "this step"}.
-        </div>
-      )}
+      <StepVisual
+        stepId={step.id}
+        groups={groups}
+        view={view}
+        removed={removed}
+        onToggle={toggleScrew}
+        drawing={
+          view ? (
+            <ViewDrawing view={view} groups={groups} removed={removed} onToggle={toggleScrew} />
+          ) : (
+            <div className="rounded-2xl border-2 border-dashed border-bench-border p-6 text-center text-lg text-bench-muted">
+              No layout drawing for {device.id === "custom" ? "this device yet" : "this step"}. Add a photo to map it.
+            </div>
+          )
+        }
+      />
 
       {groups.length > 0 ? (
         <>

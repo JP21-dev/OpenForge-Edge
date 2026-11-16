@@ -11,6 +11,7 @@ import mode
 import reference
 from agents.responder import _format_context, _format_readings, _format_references
 from knowledge import resolve_device, search, search_history
+from db import db
 from llm import get_llm
 
 log = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ class SuggestedStep(BaseModel):
 
 class SuggestResponse(BaseModel):
     steps: list[SuggestedStep]
+    patterns: list[SuggestedStep] = []
     sources: list[dict]
 
 
@@ -125,7 +127,19 @@ def _suggest(req: SuggestRequest) -> SuggestResponse:
     steps = _parse(raw.content)
     for s in steps:
         s.why = _cite(s.why, docs)
-    return SuggestResponse(steps=steps, sources=docs)
+    return SuggestResponse(steps=steps, patterns=_pattern_steps(docs), sources=docs)
+
+
+def _pattern_steps(docs: list[dict]) -> list[SuggestedStep]:
+    ids = [d["pattern_id"] for d in docs if d.get("pattern_id")]
+    out = []
+    for p in db().patterns.find({"_id": {"$in": ids}, "status": {"$ne": "dismissed"}}):
+        detail = f"Seen in {p['count']} fixed repairs with a similar symptom."
+        if p.get("fix"):
+            detail += f" Usual fix: {p['fix']}"
+        out.append(SuggestedStep(title=f"Check for: {p['root_cause']}"[:120], detail=detail[:400],
+                                 why="verified pattern" if p.get("status") == "verified" else "auto-detected pattern"))
+    return out
 
 
 def _cite(why: str, docs: list[dict]) -> str:

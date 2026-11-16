@@ -61,34 +61,67 @@ def list_reference(device_model: str | None = None, board_revision: str | None =
     return [_out(d) for d in docs]
 
 
-@router.post("/reference")
-def add_reference(body: ReferenceIn) -> dict:
-    device = device_slug(body.device_model)
-    rev = board_rev(body.board_revision)
+CAPTURE_SOURCE = "Known-good capture"
+
+
+def find_reference(device: str | None, rev: str, test_point: str, mode: str) -> dict | None:
+    return db().reference_values.find_one(
+        {"device": device, "board_rev": rev, "test_point": {"$regex": f"^{re.escape(test_point.strip())}$", "$options": "i"}, "mode": mode}
+    )
+
+
+def save_reference(
+    device_model: str,
+    rev: str,
+    test_point: str,
+    mode: str,
+    unit: str,
+    expected_min: float,
+    expected_max: float,
+    source: str = "",
+    note: str = "",
+    measured: dict | None = None,
+) -> dict:
+    device = device_slug(device_model)
     doc = {
         "device": device,
-        "device_model": body.device_model.strip(),
+        "device_model": device_model.strip(),
         "board_rev": rev,
-        "test_point": body.test_point.strip(),
-        "mode": body.mode,
-        "unit": body.unit,
-        "expected_min": body.expected_min,
-        "expected_max": body.expected_max,
-        "source": body.source.strip(),
-        "note": body.note.strip(),
+        "test_point": test_point.strip(),
+        "mode": mode,
+        "unit": unit,
+        "expected_min": min(expected_min, expected_max),
+        "expected_max": max(expected_min, expected_max),
+        "source": source.strip(),
+        "note": note.strip(),
         "updated_at": now(),
     }
-    existing = db().reference_values.find_one(
-        {"device": device, "board_rev": rev, "test_point": {"$regex": f"^{re.escape(doc['test_point'])}$", "$options": "i"}, "mode": body.mode}
-    )
+    if measured is not None:
+        doc["measured"] = measured
+    existing = find_reference(device, rev, test_point, mode)
     if existing:
         db().reference_values.update_one({"_id": existing["_id"]}, {"$set": doc})
-        doc["_id"] = existing["_id"]
+        doc = {**existing, **doc}
     else:
         doc["_id"] = uuid.uuid4().hex
         doc["created_at"] = doc["updated_at"]
         db().reference_values.insert_one(doc)
     return _out(doc)
+
+
+@router.post("/reference")
+def add_reference(body: ReferenceIn) -> dict:
+    return save_reference(
+        body.device_model,
+        board_rev(body.board_revision),
+        body.test_point,
+        body.mode,
+        body.unit,
+        body.expected_min,
+        body.expected_max,
+        body.source,
+        body.note,
+    )
 
 
 @router.delete("/reference/{ref_id}")

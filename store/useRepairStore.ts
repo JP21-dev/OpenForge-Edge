@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { AppMode, ReferenceValue } from "@/lib/api";
+import type { AppMode, Coverage, ReferenceValue } from "@/lib/api";
 import {
   CUSTOM_ID,
   DEVICES,
@@ -53,6 +53,8 @@ export interface MeterReading {
   unit: string;
   expected?: { min: number; max: number };
   takenAt: number;
+  saved?: boolean;
+  knownGood?: boolean;
 }
 
 export const METER_UNITS: Record<MeterMode, string> = {
@@ -72,6 +74,8 @@ export function readingStatus(r: MeterReading): ReadingStatus {
 }
 
 export type HudTab = "meter" | "reference" | "schematics" | "screws" | "history";
+
+export type MainView = "chat" | "capture";
 
 export interface ViewerTarget {
   schematicId: string;
@@ -119,6 +123,9 @@ interface RepairState extends DeviceSession {
   viewer: ViewerTarget | null;
   references: ReferenceValue[];
   referenceDraft: ReferenceDraft | null;
+  mainView: MainView;
+  coverage: Coverage | null;
+  finishPrompt: boolean;
 
   switchDevice: (deviceId: string, customName?: string) => void;
   setDeviceModel: (model: string) => void;
@@ -135,7 +142,8 @@ interface RepairState extends DeviceSession {
 
   toggleHud: () => void;
   setHudTab: (tab: HudTab) => void;
-  addReading: (reading: Omit<MeterReading, "id" | "takenAt">) => void;
+  addReading: (reading: Omit<MeterReading, "id" | "takenAt">) => MeterReading;
+  markReadingSaved: (id: string) => void;
   removeReading: (id: string) => void;
   toggleScrew: (key: string) => void;
   setScrews: (keys: string[], removed: boolean) => void;
@@ -146,6 +154,9 @@ interface RepairState extends DeviceSession {
   closeViewer: () => void;
   setReferences: (refs: ReferenceValue[]) => void;
   setReferenceDraft: (draft: ReferenceDraft | null) => void;
+  setMainView: (view: MainView) => void;
+  setCoverage: (coverage: Coverage | null) => void;
+  setFinishPrompt: (open: boolean) => void;
 
   resetSession: () => void;
 }
@@ -217,6 +228,9 @@ export const useRepairStore = create<RepairState>()(
       viewer: null,
       references: [],
       referenceDraft: null,
+      mainView: "chat",
+      coverage: null,
+      finishPrompt: false,
 
       switchDevice: (deviceId, customName) => {
         const state = get();
@@ -226,7 +240,7 @@ export const useRepairStore = create<RepairState>()(
         if (key === currentKey) return;
         const saved = { ...state.savedSessions, [currentKey]: snapshot(state) };
         const restored = saved[key] ?? newSession(deviceId, deviceId === CUSTOM_ID ? customName : undefined);
-        set({ deviceId, ...restored, savedSessions: saved, viewer: null, referenceDraft: null });
+        set({ deviceId, ...restored, savedSessions: saved, viewer: null, referenceDraft: null, coverage: null });
       },
       setDeviceModel: (deviceModel) => set({ deviceModel }),
       setBoardRevision: (boardRevision) => set({ boardRevision: boardRevision.trim().toUpperCase() }),
@@ -242,6 +256,7 @@ export const useRepairStore = create<RepairState>()(
       completeCurrentStep: (outcome = "done") => {
         const { diagnosticSteps, currentStepIndex } = get();
         const next = Math.min(currentStepIndex + 1, diagnosticSteps.length - 1);
+        if (next === currentStepIndex && outcome === "done") set({ finishPrompt: true });
         set({
           diagnosticSteps: diagnosticSteps.map((s, i) => {
             if (i === currentStepIndex) return { ...s, status: outcome };
@@ -297,10 +312,13 @@ export const useRepairStore = create<RepairState>()(
 
       toggleHud: () => set((state) => ({ hudOpen: !state.hudOpen })),
       setHudTab: (hudTab) => set({ hudTab, hudOpen: true }),
-      addReading: (reading) =>
-        set((state) => ({
-          readings: [{ ...reading, id: uid(), takenAt: Date.now() }, ...state.readings],
-        })),
+      addReading: (reading) => {
+        const entry: MeterReading = { ...reading, id: uid(), takenAt: Date.now() };
+        set((state) => ({ readings: [entry, ...state.readings] }));
+        return entry;
+      },
+      markReadingSaved: (id) =>
+        set((state) => ({ readings: state.readings.map((r) => (r.id === id ? { ...r, saved: true } : r)) })),
       removeReading: (id) => set((state) => ({ readings: state.readings.filter((r) => r.id !== id) })),
       toggleScrew: (key) =>
         set((state) => ({
@@ -320,6 +338,9 @@ export const useRepairStore = create<RepairState>()(
       closeViewer: () => set({ viewer: null }),
       setReferences: (references) => set({ references }),
       setReferenceDraft: (referenceDraft) => set({ referenceDraft }),
+      setMainView: (mainView) => set({ mainView }),
+      setCoverage: (coverage) => set({ coverage }),
+      setFinishPrompt: (finishPrompt) => set({ finishPrompt }),
 
       resetSession: () =>
         set((state) => newSession(state.deviceId, state.deviceModel, state.procedureId)),
@@ -335,6 +356,9 @@ export const useRepairStore = create<RepairState>()(
         viewer: _viewer,
         references: _refs,
         referenceDraft: _draft,
+        mainView: _view,
+        coverage: _coverage,
+        finishPrompt: _finish,
         ...rest
       }) => rest,
     },

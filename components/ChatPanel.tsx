@@ -167,7 +167,7 @@ export function ChatPanel() {
             type="submit"
             disabled={!input.trim() || thinking}
             aria-label="Send"
-            className="grid size-16 shrink-0 place-items-center rounded-2xl bg-bench-accent text-black transition-opacity disabled:opacity-30"
+            className="grid size-16 shrink-0 place-items-center rounded-2xl bg-bench-accent text-white transition-opacity disabled:opacity-30"
           >
             <SendHorizonal className="size-8" />
           </button>
@@ -179,10 +179,11 @@ export function ChatPanel() {
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const openViewer = useRepairStore((s) => s.openViewer);
+  const deviceModel = useRepairStore((s) => s.deviceModel);
   if (message.role === "system") {
     return (
       <p className="mx-auto max-w-3xl rounded-lg border border-dashed border-bench-border px-4 py-2 text-center text-lg text-bench-muted">
-        {message.content}
+        {message.id === "welcome" ? `${deviceModel} · running locally, no data leaves this bench.` : message.content}
       </p>
     );
   }
@@ -193,7 +194,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     <div className={`flex gap-3 ${isTech ? "flex-row-reverse" : ""}`}>
       <div
         className={`grid size-12 shrink-0 place-items-center rounded-xl ${
-          isTech ? "bg-bench-raised text-bench-text" : "bg-bench-accent text-black"
+          isTech ? "bg-bench-raised text-bench-text" : "bg-bench-accent text-white"
         }`}
         aria-hidden
       >

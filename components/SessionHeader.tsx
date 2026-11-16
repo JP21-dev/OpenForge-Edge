@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, CircuitBoard, Cpu, FileText, Flag, PanelRightClose, PanelRightOpen, RotateCcw, X } from "lucide-react";
+import { Check, CircuitBoard, Flag, PanelRightClose, PanelRightOpen, RotateCcw, X } from "lucide-react";
 import { selectCurrentStep, selectDevice, useRepairStore } from "@/store/useRepairStore";
 import { api } from "@/lib/api";
 import { DevicePicker, ProcedurePicker } from "@/components/DevicePicker";
@@ -9,9 +9,9 @@ import { ModeToggle } from "@/components/ModeToggle";
 import { FinishRepairDialog } from "@/components/FinishRepairDialog";
 import { FailStepDialog } from "@/components/FailStepDialog";
 import { RecordingPill } from "@/components/CoverageBanner";
+import { Logo } from "@/components/Logo";
 
 export function SessionHeader() {
-  const schematic = useRepairStore((s) => s.activeSchematic);
   const steps = useRepairStore((s) => s.diagnosticSteps);
   const stepIndex = useRepairStore((s) => s.currentStepIndex);
   const currentStep = useRepairStore(selectCurrentStep);
@@ -28,9 +28,15 @@ export function SessionHeader() {
   const [failing, setFailing] = useState(false);
 
   return (
-    <header className="shrink-0 border-b-2 border-bench-border bg-bench-panel">
+    <header className="shrink-0 border-b-2 border-bench-accent/50 bg-bench-panel">
       <div className="flex h-[4.5rem] items-center gap-2 px-3 md:gap-3 md:px-6">
-        <Cpu className="hidden size-8 shrink-0 text-bench-accent sm:block" aria-hidden />
+        <div className="flex shrink-0 items-center gap-3">
+          <Logo className="size-9" />
+          <span className="hidden whitespace-nowrap text-lg font-bold tracking-tight xl:block">
+            OpenForge <span className="text-bench-muted">Repair Bench</span>
+          </span>
+        </div>
+        <span className="mx-1 hidden h-8 w-px bg-bench-border sm:block" aria-hidden />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <DevicePicker />
           <BoardRevisionPicker />
@@ -42,20 +48,16 @@ export function SessionHeader() {
         </IconButton>
       </div>
 
-      <div className="flex h-[4.5rem] items-center gap-2 border-t border-bench-border/60 px-3 md:gap-3 md:px-6">
+      <div className="flex h-[4.5rem] items-center gap-2 border-t border-bench-border/60 bg-bench-bg/40 px-3 md:gap-3 md:px-6">
         {appMode === "repair" ? (
           <>
             <ProcedurePicker />
-            <span className="shrink-0 rounded-md bg-bench-accent px-2 py-1 font-mono text-base font-black text-black md:px-3 md:text-lg">
+            <span className="shrink-0 rounded-md bg-bench-accent px-2 py-1 font-mono text-base font-black text-white md:px-3 md:text-lg">
               <span className="hidden sm:inline">STEP </span>
               {stepIndex + 1}/{steps.length}
             </span>
             <span className="min-w-0 flex-1 truncate text-lg font-semibold md:text-xl" title={currentStep?.title}>
               {currentStep?.title ?? "No active step"}
-            </span>
-            <span className="hidden max-w-64 shrink items-center gap-2 truncate text-lg text-bench-muted 2xl:flex">
-              <FileText className="size-6 shrink-0" aria-hidden />
-              <span className="truncate">{schematic ? schematic.name : "No schematic open"}</span>
             </span>
             <IconButton label="Mark step passed" onClick={() => completeCurrentStep("done")} tone="ok">
               <Check className="size-7" />

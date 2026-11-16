@@ -181,7 +181,7 @@ export function FailStepDialog({ onClose }: { onClose: () => void }) {
           <button
             onClick={() => submit(true)}
             disabled={!chosen.length}
-            className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent px-4 text-xl font-black text-black disabled:opacity-30"
+            className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent px-4 text-xl font-black text-white disabled:opacity-30"
           >
             <ListPlus className="size-6" aria-hidden />
             Add {chosen.length || ""} step{chosen.length === 1 ? "" : "s"} and continue
@@ -207,7 +207,7 @@ function OptionRow({ option, checked, onToggle }: { option: Option; checked: boo
     >
       <span
         className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-md border-2 ${
-          checked ? "border-bench-accent bg-bench-accent text-black" : "border-bench-border"
+          checked ? "border-bench-accent bg-bench-accent text-white" : "border-bench-border"
         }`}
         aria-hidden
       >

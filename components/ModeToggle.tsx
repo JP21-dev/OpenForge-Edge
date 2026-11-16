@@ -66,7 +66,7 @@ export function ModeToggle() {
             onClick={() => choose(id)}
             title={id === "repair" ? "Chat model loaded, for diagnosing boards" : "Vision model loaded, for reading schematics"}
             className={`flex h-11 items-center gap-2 rounded-lg px-3 text-lg font-bold disabled:opacity-50 ${
-              appMode === id ? "bg-bench-accent text-black" : "text-bench-muted hover:text-bench-text"
+              appMode === id ? "bg-bench-accent text-white" : "text-bench-muted hover:text-bench-text"
             }`}
           >
             <Icon className="size-5" aria-hidden />

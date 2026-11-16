@@ -94,7 +94,7 @@ export function SchematicViewer() {
           onClick={() => setShowText((v) => !v)}
           aria-pressed={showText}
           className={`flex h-12 items-center gap-2 rounded-xl px-4 text-lg font-bold ${
-            showText ? "bg-bench-accent text-black" : "bg-bench-raised hover:bg-bench-border"
+            showText ? "bg-bench-accent text-white" : "bg-bench-raised hover:bg-bench-border"
           }`}
         >
           <FileText className="size-5" aria-hidden />
@@ -178,7 +178,7 @@ function PageTextPanel({
         <button
           onClick={() => run(() => api.editPage(doc.id, pageNumber, text))}
           disabled={busy || text === page.text}
-          className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent text-xl font-black text-black disabled:opacity-30"
+          className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent text-xl font-black text-white disabled:opacity-30"
         >
           {busy ? <Loader2 className="size-6 animate-spin" aria-hidden /> : <Save className="size-6" aria-hidden />}
           Save

@@ -7,10 +7,10 @@ import { VIEW_BOX, screwKey, type DeviceView, type ScrewGroup, type Shape } from
 import { COLORS, StepVisual } from "@/components/StepVisual";
 
 const FILL: Record<string, string> = {
-  body: "#11161c",
-  part: "#1c242d",
-  chip: "#2a3440",
-  hot: "#3a2a12",
+  body: "#141418",
+  part: "#1e1e24",
+  chip: "#2c2c35",
+  hot: "#24193d",
 };
 
 export function ScrewMapPanel() {
@@ -191,19 +191,19 @@ export function ScrewMapPanel() {
 function ShapeEl({ shape }: { shape: Shape }) {
   if (shape.kind === "text") {
     return (
-      <text x={shape.x} y={shape.y} textAnchor="middle" fontSize={5} fill="#8b97a5">
+      <text x={shape.x} y={shape.y} textAnchor="middle" fontSize={5} fill="#a1a1aa">
         {shape.text}
       </text>
     );
   }
   const fill = FILL[shape.tone ?? "part"];
-  const stroke = shape.tone === "hot" ? "#f5a524" : "#3a4652";
+  const stroke = shape.tone === "hot" ? "#9061f9" : "#3a3a45";
   if (shape.kind === "circle") {
     return (
       <g>
         <circle cx={shape.x} cy={shape.y} r={shape.r} fill={fill} stroke={stroke} strokeWidth={0.8} />
         {shape.label && (
-          <text x={shape.x} y={shape.y + 1.8} textAnchor="middle" fontSize={5} fill="#8b97a5">
+          <text x={shape.x} y={shape.y + 1.8} textAnchor="middle" fontSize={5} fill="#a1a1aa">
             {shape.label}
           </text>
         )}
@@ -214,7 +214,7 @@ function ShapeEl({ shape }: { shape: Shape }) {
     <g>
       <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx={shape.tone === "body" ? 5 : 1.5} fill={fill} stroke={stroke} strokeWidth={0.8} />
       {shape.label && (
-        <text x={shape.x + shape.w / 2} y={shape.y + shape.h / 2 + 1.8} textAnchor="middle" fontSize={shape.h < 12 ? 4 : 5} fill="#8b97a5">
+        <text x={shape.x + shape.w / 2} y={shape.y + shape.h / 2 + 1.8} textAnchor="middle" fontSize={shape.h < 12 ? 4 : 5} fill="#a1a1aa">
           {shape.label}
         </text>
       )}

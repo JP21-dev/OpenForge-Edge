@@ -82,7 +82,7 @@ export function DevicePicker() {
               aria-label="Other device name"
               className="h-12 min-w-0 flex-1 rounded-xl border-2 border-bench-border bg-bench-bg px-3 text-lg focus:border-bench-accent focus:outline-none"
             />
-            <button type="submit" disabled={!custom.trim()} className="h-12 rounded-xl bg-bench-accent px-4 text-lg font-bold text-black disabled:opacity-30">
+            <button type="submit" disabled={!custom.trim()} className="h-12 rounded-xl bg-bench-accent px-4 text-lg font-bold text-white disabled:opacity-30">
               Use
             </button>
           </form>

@@ -187,7 +187,7 @@ export function CapturePanel() {
                   <button
                     type="submit"
                     disabled={saving || parseNumber(value) === null || !boardLabel.trim()}
-                    className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent text-xl font-black text-black disabled:opacity-30"
+                    className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent text-xl font-black text-white disabled:opacity-30"
                   >
                     {saving ? <Loader2 className="size-6 animate-spin" aria-hidden /> : <Check className="size-6" aria-hidden />}
                     Save and next
@@ -325,7 +325,7 @@ function AddPointForm({ onDone }: { onDone: (added?: { test_point: string; mode:
             role="radio"
             aria-checked={mode === m}
             onClick={() => setMode(m)}
-            className={`h-12 rounded-xl font-mono text-base font-bold ${mode === m ? "bg-bench-accent text-black" : "bg-bench-bg text-bench-muted"}`}
+            className={`h-12 rounded-xl font-mono text-base font-bold ${mode === m ? "bg-bench-accent text-white" : "bg-bench-bg text-bench-muted"}`}
           >
             {m}
           </button>
@@ -334,7 +334,7 @@ function AddPointForm({ onDone }: { onDone: (added?: { test_point: string; mode:
       <input value={hint} onChange={(e) => setHint(e.target.value)} placeholder="Where and how to measure (optional)" className={field} />
       {error && <p className="text-lg text-bench-fault">{error}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={!testPoint.trim()} className="h-14 flex-1 rounded-xl bg-bench-accent text-xl font-black text-black disabled:opacity-30">
+        <button type="submit" disabled={!testPoint.trim()} className="h-14 flex-1 rounded-xl bg-bench-accent text-xl font-black text-white disabled:opacity-30">
           Add to checklist ({METER_UNITS[mode]})
         </button>
         <button type="button" onClick={() => onDone()} className="h-14 rounded-xl bg-bench-bg px-6 text-lg font-semibold text-bench-muted">

@@ -8,7 +8,7 @@ import { api, type RepairOutcome } from "@/lib/api";
 const OUTCOMES: { id: RepairOutcome; label: string; tone: string }[] = [
   { id: "fixed", label: "Fixed", tone: "bg-bench-ok text-black" },
   { id: "not_fixed", label: "Not fixed", tone: "bg-bench-fault text-black" },
-  { id: "parked", label: "Parked", tone: "bg-bench-accent text-black" },
+  { id: "parked", label: "Parked", tone: "bg-bench-accent text-white" },
 ];
 
 export function FinishRepairDialog({ onClose, prompted = false }: { onClose: () => void; prompted?: boolean }) {
@@ -130,7 +130,7 @@ export function FinishRepairDialog({ onClose, prompted = false }: { onClose: () 
           <button
             type="submit"
             disabled={saving || !symptom.trim()}
-            className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent text-xl font-black text-black disabled:opacity-40"
+            className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent text-xl font-black text-white disabled:opacity-40"
           >
             {saving && <Loader2 className="size-6 animate-spin" aria-hidden />}
             Save and start a new session

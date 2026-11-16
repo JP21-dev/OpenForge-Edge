@@ -12,6 +12,7 @@ export function CoverageBanner() {
   const setMainView = useRepairStore((s) => s.setMainView);
   const setHudTab = useRepairStore((s) => s.setHudTab);
   const [dismissed, setDismissed] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [showPull, setShowPull] = useState(false);
 
   const key = `${deviceModel}|${boardRevision}`;
@@ -21,32 +22,52 @@ export function CoverageBanner() {
   const none = coverage.level === "none";
 
   return (
-    <div className="mx-auto max-w-3xl rounded-2xl border-2 border-bench-accent/70 bg-bench-accent/10 p-4" role="status">
-      <div className="flex items-start gap-3">
-        <Database className="mt-1 size-6 shrink-0 text-bench-accent" aria-hidden />
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-xl font-bold">
-            {none ? `No saved data for ${deviceModel} yet.` : `Little saved data for ${deviceModel}${boardRevision ? ` ${boardRevision}` : ""}.`}
+    <div className="mx-auto max-w-3xl rounded-xl border border-bench-accent/50 bg-bench-accent/[0.07] px-4 py-3" role="status">
+      <div className="flex items-center gap-3">
+        <Database className="size-5 shrink-0 text-bench-accent" aria-hidden />
+        <p className="min-w-0 flex-1 text-base">
+          <span className="font-semibold">{none ? "No saved data yet" : "Little saved data"}</span>
+          <span className="text-bench-muted">
+            {" "}
+            · {c.reference_values}/{coverage.targets.reference_values} known-good values · {c.repairs}/{coverage.targets.repairs} repairs
+          </span>
+        </p>
+        <button
+          onClick={() => setMainView("capture")}
+          className="hidden h-10 shrink-0 items-center gap-2 rounded-lg bg-bench-accent px-3 text-base font-bold text-white sm:flex"
+        >
+          Capture values
+        </button>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="h-10 shrink-0 rounded-lg px-3 text-base font-semibold text-bench-muted hover:bg-bench-raised hover:text-bench-text"
+        >
+          {expanded ? "Less" : "Details"}
+        </button>
+        <button onClick={() => setDismissed(key)} aria-label="Hide for now" className="grid size-10 shrink-0 place-items-center rounded-lg text-bench-muted hover:bg-bench-raised">
+          <X className="size-5" />
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-3 space-y-2 border-t border-bench-border pt-3 pl-8">
+          <p className="text-base text-bench-muted">
+            {c.known_good_boards} good boards measured · {c.schematics} schematics
+            {c.placeholders > 0 && ` · ${c.placeholders} placeholder value${c.placeholders === 1 ? "" : "s"} (typical values, replaced by your first captures)`}
           </p>
-          <p className="text-lg">
-            {c.reference_values}/{coverage.targets.reference_values} known-good values · {c.known_good_boards} good boards measured ·{" "}
-            {c.repairs}/{coverage.targets.repairs} repairs · {c.schematics} schematics
-            {c.placeholders > 0 && ` · ${c.placeholders} placeholder value${c.placeholders === 1 ? "" : "s"} (typical values, replaced by your first captures)`}.
-            Help build it while you work:
-          </p>
-          <ul className="list-inside list-disc text-lg text-bench-muted">
+          <ul className="list-inside list-disc text-base text-bench-muted">
             <li>On a working board, capture known-good values from the checklist.</li>
             <li>Tick &quot;Board is known-good&quot; when logging a reading from a working board.</li>
             <li>Finish the repair with the flag button so the fix is saved to history.</li>
           </ul>
-          <p className="flex items-center gap-2 text-base font-semibold text-bench-ok">
-            <CircleDot className="size-4 animate-pulse" aria-hidden />
-            Recording: readings, captures and finished repairs are saved to the database on this machine.
+          <p className="flex items-center gap-2 text-sm font-semibold text-bench-ok">
+            <CircleDot className="size-4" aria-hidden />
+            Recording: readings, captures and finished repairs are saved on this machine.
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
             <button
               onClick={() => setMainView("capture")}
-              className="flex h-12 items-center gap-2 rounded-xl bg-bench-accent px-4 text-lg font-bold text-black"
+              className="flex h-12 items-center gap-2 rounded-xl bg-bench-accent px-4 text-lg font-bold text-white"
             >
               <Database className="size-5" aria-hidden />
               Capture known-good values
@@ -70,10 +91,7 @@ export function CoverageBanner() {
           </div>
           {showPull && <IfixitPull compact onPulled={() => useRepairStore.getState().setCoverage({ ...coverage, counts: { ...c, knowledge_chunks: 1 } })} />}
         </div>
-        <button onClick={() => setDismissed(key)} aria-label="Hide for now" className="grid size-10 shrink-0 place-items-center rounded-lg hover:bg-bench-raised">
-          <X className="size-6" />
-        </button>
-      </div>
+      )}
     </div>
   );
 }

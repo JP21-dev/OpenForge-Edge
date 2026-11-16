@@ -190,7 +190,7 @@ function newSession(deviceId: string, deviceModel?: string, procedureId?: string
       {
         id: "welcome",
         role: "system",
-        content: `OpenForge Edge is running locally for ${deviceModel ?? device.name}. No data leaves this bench.`,
+        content: `${deviceModel ?? device.name} · running locally, no data leaves this bench.`,
         createdAt: 0,
       },
     ],

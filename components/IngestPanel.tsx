@@ -186,7 +186,7 @@ function UploadForm({ onUploaded }: { onUploaded: () => void }) {
       <button
         type="submit"
         disabled={uploading || !files.length || !title.trim() || !device.trim()}
-        className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-bench-accent text-2xl font-black text-black disabled:opacity-30"
+        className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-bench-accent text-2xl font-black text-white disabled:opacity-30"
       >
         {uploading ? <Loader2 className="size-7 animate-spin" aria-hidden /> : <UploadCloud className="size-7" aria-hidden />}
         {uploading ? "Uploading…" : `Upload ${files.length || ""} file${files.length === 1 ? "" : "s"}`}

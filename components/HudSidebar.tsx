@@ -64,7 +64,7 @@ export function HudSidebar() {
         aria-label="Bench HUD"
         className={`${
           open ? "flex" : "hidden"
-        } fixed inset-y-0 right-0 z-20 w-full max-w-md flex-col border-l-2 border-bench-border bg-bench-panel lg:static lg:z-auto lg:w-[26rem] lg:max-w-none xl:w-[30rem]`}
+        } fixed inset-y-0 right-0 z-20 w-full max-w-md flex-col border-l-2 border-bench-accent/30 bg-bench-panel lg:static lg:z-auto lg:w-[26rem] lg:max-w-none xl:w-[30rem]`}
       >
         <div className="flex shrink-0 items-center gap-2 border-b-2 border-bench-border p-3">
           <div role="tablist" className="flex min-w-0 flex-1 gap-1.5">
@@ -75,7 +75,7 @@ export function HudSidebar() {
                 aria-selected={tab === id}
                 onClick={() => setHudTab(id)}
                 className={`flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-xs font-bold transition-colors ${
-                  tab === id ? "bg-bench-accent text-black" : "bg-bench-raised text-bench-muted hover:text-bench-text"
+                  tab === id ? "bg-bench-accent text-white" : "bg-bench-raised text-bench-muted hover:text-bench-text"
                 }`}
               >
                 <Icon className="size-6" aria-hidden />
@@ -155,7 +155,7 @@ function MultimeterPanel() {
       ) : (
         <button
           onClick={() => setLogging(true)}
-          className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-bench-accent text-2xl font-black text-black"
+          className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-bench-accent text-2xl font-black text-white"
         >
           <Plus className="size-8" aria-hidden />
           Log reading
@@ -357,7 +357,7 @@ function LogReadingForm({ onDone }: { onDone: () => void }) {
             aria-checked={mode === m}
             onClick={() => setMode(m)}
             className={`h-14 rounded-xl font-mono text-lg font-bold ${
-              mode === m ? "bg-bench-accent text-black" : "bg-bench-bg text-bench-muted hover:text-bench-text"
+              mode === m ? "bg-bench-accent text-white" : "bg-bench-bg text-bench-muted hover:text-bench-text"
             }`}
           >
             {m}
@@ -414,7 +414,7 @@ function LogReadingForm({ onDone }: { onDone: () => void }) {
         <button
           type="submit"
           disabled={!canSave}
-          className="h-14 flex-1 rounded-xl bg-bench-accent text-xl font-black text-black disabled:opacity-30"
+          className="h-14 flex-1 rounded-xl bg-bench-accent text-xl font-black text-white disabled:opacity-30"
         >
           Save
         </button>

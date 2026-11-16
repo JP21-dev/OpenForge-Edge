@@ -108,7 +108,7 @@ export function StepVisual({ stepId, groups, view, removed, onToggle, drawing }:
               role="tab"
               aria-selected={show === v}
               onClick={() => setShow(v)}
-              className={`${btn} flex-1 justify-center ${show === v ? "bg-bench-accent text-black" : "text-bench-muted"}`}
+              className={`${btn} flex-1 justify-center ${show === v ? "bg-bench-accent text-white" : "text-bench-muted"}`}
             >
               {v === "photo" ? <ImageIcon className="size-5" aria-hidden /> : <PenLine className="size-5" aria-hidden />}
               {v === "photo" ? "Photo" : "Drawing"}
@@ -181,7 +181,7 @@ export function StepVisual({ stepId, groups, view, removed, onToggle, drawing }:
               }
               setPlacing((v) => !v);
             }}
-            className={`${btn} ${placing ? "bg-bench-accent text-black" : "bg-bench-raised hover:bg-bench-border"}`}
+            className={`${btn} ${placing ? "bg-bench-accent text-white" : "bg-bench-raised hover:bg-bench-border"}`}
           >
             <Crosshair className="size-5" aria-hidden />
             {placing ? "Done placing" : unplaced.length ? "Place screws" : "Re-place screws"}

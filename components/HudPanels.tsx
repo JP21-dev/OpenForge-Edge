@@ -54,7 +54,7 @@ export function ReferencePanel() {
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-bench-accent text-2xl font-black text-black"
+          className="flex h-16 w-full items-center justify-center gap-3 rounded-2xl bg-bench-accent text-2xl font-black text-white"
         >
           <Plus className="size-8" aria-hidden />
           Add reference value
@@ -165,7 +165,7 @@ function ReferenceForm({ onDone }: { onDone: () => void }) {
             aria-checked={mode === m}
             onClick={() => setMode(m)}
             className={`h-14 rounded-xl font-mono text-lg font-bold ${
-              mode === m ? "bg-bench-accent text-black" : "bg-bench-bg text-bench-muted hover:text-bench-text"
+              mode === m ? "bg-bench-accent text-white" : "bg-bench-bg text-bench-muted hover:text-bench-text"
             }`}
           >
             {m}
@@ -203,7 +203,7 @@ function ReferenceForm({ onDone }: { onDone: () => void }) {
         <button
           type="submit"
           disabled={!canSave || saving}
-          className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent text-xl font-black text-black disabled:opacity-30"
+          className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-bench-accent text-xl font-black text-white disabled:opacity-30"
         >
           {saving && <Loader2 className="size-6 animate-spin" aria-hidden />}
           Save

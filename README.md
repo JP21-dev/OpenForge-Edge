@@ -1,24 +1,79 @@
 # OpenForge Edge 🛠️
-**Offline-First Multimodal AI Copilot for Hardware Repair & Diagnostics**
+**An offline AI copilot for the hardware repair bench, built on AMD Lemonade**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Built with Lemonade](https://img.shields.io/badge/Built%20with-Lemonade%20by%20AMD-ED1C24)](https://lemonade-server.ai)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-orange)](https://langchain-ai.github.io/langgraph/)
-[![AMD Lemonade](https://img.shields.io/badge/AMD-Lemonade%20Ready-ED1C24)](https://lemonade-server.ai)
 
-OpenForge Edge (formerly Forge Assist) is a zero-trust, offline-first multimodal AI copilot designed for hardware repair technicians, micro-soldering specialists, and the Right-to-Repair community.
+OpenForge Edge is an open-source copilot for electronics repair technicians, micro-soldering shops and the Right-to-Repair community. It walks a technician through a repair step by step, reads their meter readings, searches the manuals and schematics they have loaded, suggests what to try when a step fails, and learns from every finished job. Everything runs on the bench machine: no cloud, no API keys, and customer devices, licensed schematics and repair data never leave the shop.
 
-Built to run entirely on local edge devices, OpenForge Edge removes the reliance on expensive cloud API tokens and ensures absolute customer data privacy at the repair bench. By leveraging multi-agent routing and local RAG, it provides technicians with interactive board diagnostics, real-time multimeter HUDs, and guided training workflows without ever sending proprietary schematics or customer details to the cloud.
+| Guided repairs with screw maps | Known-good capture | Schematic and guide ingest |
+|---|---|---|
+| ![Repair step with a 2D screw map](docs/screenshots/screw-map.png) | ![Capturing known-good values](docs/screenshots/known-good-capture.png) | ![Ingest mode](docs/screenshots/ingest-mode.png) |
 
-**Built for AMD Lemonade.** OpenForge Edge runs on [AMD Lemonade](https://lemonade-server.ai), AMD's local AI server, with one configuration file: chat, triage and manual embeddings all run through Lemonade's OpenAI-compatible API. On Ryzen AI 300-series laptops the copilot runs on the NPU and integrated GPU together (Hybrid models); on Radeon GPUs it runs through llama.cpp with Vulkan or ROCm. Ollama is supported as an alternative engine for non-AMD machines. See [AMD Lemonade Integration](#-amd-lemonade-integration).
+> 🎥 **Demo video:** coming soon.
+
+---
+
+## 🍋 AMD Lemonade Developer Challenge
+
+OpenForge Edge is entered in the [AMD Lemonade Developer Challenge](https://lemonade-server.ai). It shows Lemonade powering a complete, multi-agent, multimodal application rather than a chat window: one local Lemonade server provides chat, vision and embeddings, and the app manages which models are loaded so it fits on a laptop.
+
+### Why a repair bench needs local AI
+*   **Privacy:** phones, laptops and consoles on the bench hold customers' personal data, and many shops are contractually barred from uploading it.
+*   **Licensed data:** schematics and boardview data from paid tools are licensed for the shop's own use; sending them to a cloud API would break that licence.
+*   **No dependable internet:** benches are often in back rooms, basements and on the road. The copilot has to work with the network cable unplugged.
+*   **Cost:** a busy bench asks hundreds of questions a day. Local inference makes that free.
+
+### How Lemonade is used
+
+| Capability | Lemonade feature | Where |
+|---|---|---|
+| Streaming copilot answers, triage routing, next-step suggestions | OpenAI-compatible `/api/v1/chat/completions` with streaming; `enable_thinking` turned off for Qwen3 so answers start immediately | [`backend/llm.py`](backend/llm.py) |
+| Reading schematic PDFs and phone photos of schematics | Vision-language GGUF models (`Qwen2.5-VL-7B-Instruct-GGUF`, `Gemma-3-4b-it-GGUF`) with image inputs | [`backend/vision.py`](backend/vision.py) |
+| Searching manuals, schematics, iFixit guides and past repairs | `/api/v1/embeddings` with `nomic-embed-text-v1-GGUF` | [`backend/knowledge.py`](backend/knowledge.py) |
+| Repair / Ingest switch: only one large model in memory at a time | `/api/v1/load` and `/api/v1/unload` | [`backend/mode.py`](backend/mode.py) |
+| One-command setup | `lemonade pull`, a ready-made `.env.lemonade.example`, setup scripts for Windows and Linux | [`scripts/setup-lemonade.ps1`](scripts/setup-lemonade.ps1), [`.env.lemonade.example`](.env.lemonade.example) |
+
+Switching the whole stack to Lemonade is one file: copy `.env.lemonade.example` to `.env`. See [AMD Lemonade Integration](#-amd-lemonade-integration) for setup, model choices per AMD platform, and how each piece works.
+
+### What the judges asked for
+
+| Criterion | What OpenForge Edge brings |
+|---|---|
+| **Community impact** | MIT licensed. A complete reference app for building a real Lemonade-backed product: LangChain + Lemonade provider setup, vision ingest, embeddings with a mismatch guard, model load/unload management, Docker networking notes for Windows, WSL2 and Linux. Every feature is documented in this README, with [contribution guidelines](CONTRIBUTING.md) for device profiles and sourced repair notes. Built for an underserved community: independent repair technicians. |
+| **Technical depth** | LangGraph multi-agent routing (triage → retrieval → answer), retrieval across manuals, vision-read schematics, iFixit guides and the shop's own repair history, a value-coverage check that answers "not in the knowledge base yet" instead of inventing a voltage, automatic promotion of recurring faults from repair history, board-revision filtering, streaming over NDJSON, backups and restore. |
+| **Creativity** | A bench-first interface for gloved hands: large touch targets, a live multimeter HUD, 2D screw maps that show only the screws for the current step, photo-based screw mapping, a "step failed" panel that proposes new diagnostic steps, and a known-good capture mode that turns every working board into reference data. |
+
+### Status
+
+*   Developed and used daily on an **NVIDIA RTX 2060 6 GB laptop with Ollama**. Ollama also exposes an OpenAI-compatible API, and the Lemonade chat code path was exercised through it.
+*   The Lemonade configuration, setup scripts, vision path and load/unload calls are implemented from Lemonade's documentation but **have not yet run on AMD hardware**: the author does not have an AMD machine yet.
+*   Closing that gap is the first job for a Ryzen AI laptop, following the plan below.
+
+### 📊 Performance evaluation plan
+
+The evaluation planned for an AMD Ryzen™ AI Max+ 395 (Strix Halo) laptop, with results, raw data and scripts to be published in this repository:
+
+| | |
+|---|---|
+| **Configurations** | Lemonade llama.cpp on the Radeon iGPU with ROCm and with Vulkan; Lemonade NPU/Hybrid models where supported; baseline: Ollama on the RTX 2060 laptop used for development |
+| **Models** | Qwen3-8B and Qwen3-4B-Instruct for chat, a larger MoE model such as Qwen3-30B-A3B that the unified memory makes possible, Qwen2.5-VL-7B for vision, nomic-embed-text for embeddings |
+| **Speed** | Time to first token, tokens per second, end-to-end answer time, cold model-load time, Repair ↔ Ingest switch time, seconds per schematic page |
+| **Quality** | A fixed set of real bench questions per device with known answers, scored as correct, correctly "not in the knowledge base", or wrong; with special attention to invented voltages and part numbers |
+| **Efficiency** | Package power and battery drain per 100 questions, memory use per configuration |
+| **Method** | Same questions, prompts and knowledge base for every configuration; one warm-up run, then three measured runs; median reported with the spread |
+
+With up to 128 GB of unified memory, Strix Halo can also keep the chat, vision and embedding models loaded at the same time, so the Repair / Ingest switch becomes optional. Measuring whether larger local models measurably reduce wrong answers at the bench is the most interesting result for the local-AI community.
 
 ---
 
 ## 🚀 Key Features
 
 *   **Zero-Trust Edge Inference:** Runs 100% offline using local LLMs, ensuring customer data privacy and eliminating cloud compute costs.
-*   **AMD Lemonade Ready:** Switch the whole AI stack (chat and embeddings) to Lemonade with `.env.lemonade.example` and a setup script. Runs on Ryzen AI NPU + iGPU (Hybrid) or Radeon GPUs; Ollama (`qwen2.5:7b`) remains available for other hardware.
+*   **AMD Lemonade Ready:** Switch the whole AI stack (chat, vision and embeddings) to Lemonade with `.env.lemonade.example` and a setup script, including model load/unload for the Repair / Ingest switch. Targets Ryzen AI NPU + iGPU (Hybrid) and Radeon GPUs with ROCm or Vulkan; Ollama (`qwen2.5:7b`) remains available for other hardware.
 *   **Streaming Bench Chat:** Large, high-contrast chat built for use mid-repair. Answers stream in as they are generated, with live agent status ("Triaging issue…", "Searching schematics…") and cited manual excerpts.
 *   **Multimeter HUD & Diode Testing:** Log readings from any meter with large touch targets (test point, mode, value, optional expected range). Readings are flagged in/out of range and sent to the copilot, so you can ask "Is this reading bad?" or "What should I check next?".
 *   **Device Profiles:** Full profiles (screw maps, iFixit-sourced notes) for PlayStation 5 and Xbox Series X, starter profiles for PlayStation 4, Xbox Series S, Xbox One, Nintendo Switch and Switch 2, iPhone, Google Pixel, Samsung Galaxy S, iPad, Android tablets, MacBook and Windows laptops, plus any other device by name. Switching devices keeps a separate session for each, so you can flip between benches and pick up where you left off.
@@ -700,9 +755,11 @@ Agents are registered in `backend/agents/__init__.py`. Nothing in `graph.py` nee
 ---
 
 ## 🤝 Contributing
-OpenForge Edge is built for the community. Whether you are adding new schematic OCR parsers, optimizing the LangGraph prompts for specific device triages, or improving the Next.js UI, contributions are welcome. Please check our `CONTRIBUTING.md` for guidelines.
+OpenForge Edge is built for the community. Lemonade benchmarks on AMD hardware, new device profiles, sourced repair notes, prompt improvements and UI work are all welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the rules for repair knowledge (cite sources, no proprietary files, no made-up values) and how to add a device.
 
 ## 📄 License
-This project is licensed under the MIT License - see the `LICENSE` file for details.
+OpenForge Edge is licensed under the [MIT License](LICENSE).
+
+Third-party content keeps its own licence: notes in `data/manuals/` cite their sources, and guides pulled from iFixit with the in-app import are CC BY-NC-SA and stay in your local database.
 
 *Developed by Lapis Forge.*

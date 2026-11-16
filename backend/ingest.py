@@ -6,7 +6,15 @@ import sys
 from pathlib import Path
 
 from config import settings
-from knowledge import EmbeddingMismatch, check_embedding, collection, embed_documents, embedding_id, reset_collection
+from knowledge import (
+    EmbeddingMismatch,
+    board_rev,
+    check_embedding,
+    collection,
+    embed_documents,
+    embedding_id,
+    reset_collection,
+)
 
 CHUNK_CHARS = 1200
 BATCH = 32
@@ -98,26 +106,44 @@ def ingest_file(path: Path, root: Path) -> int:
     device = meta.get("device") or rel.split("/")[0].lower()
     base = {
         "device": device,
+        "board_rev": board_rev(meta.get("board_rev")),
         "source": rel,
         "doc_type": meta.get("type", path.suffix.lstrip(".").lower()),
         "board": meta.get("board", ""),
         "url": meta.get("url", ""),
         "reliability": meta.get("reliability", ""),
     }
+    store_pieces(rel, base, pieces)
+    print(f"  {rel}: {len(pieces)} chunks ({device}, rev {base['board_rev']})")
+    return len(pieces)
 
+
+def store_pieces(key: str, base: dict, pieces: list[dict], replace: dict | None = None) -> None:
     col = collection()
-    col.delete(where={"source": rel})
+    col.delete(where=replace or {"source": key})
     for start in range(0, len(pieces), BATCH):
         batch = pieces[start:start + BATCH]
         texts = [p["text"] for p in batch]
         col.add(
-            ids=[hashlib.sha1(f"{rel}:{start + i}".encode()).hexdigest() for i in range(len(batch))],
+            ids=[hashlib.sha1(f"{key}:{start + i}".encode()).hexdigest() for i in range(len(batch))],
             documents=texts,
             embeddings=embed_documents(texts),
             metadatas=[{**base, "section": p["section"], "page": p["page"]} for p in batch],
         )
-    print(f"  {rel}: {len(pieces)} chunks ({device})")
-    return len(pieces)
+
+
+def _restore_uploads() -> int:
+    try:
+        import history
+        import schematics
+
+        pages = schematics.reindex_all()
+        repairs = history.reindex_all()
+    except Exception as exc:
+        print(f"  could not restore uploaded schematics and repair history: {exc}", file=sys.stderr)
+        return 0
+    print(f"  restored {pages} chunks from uploaded schematics and {repairs} past repairs")
+    return pages
 
 
 def main() -> int:
@@ -142,6 +168,8 @@ def main() -> int:
     files = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED)
     print(f"Ingesting {len(files)} files from {root} into '{settings.chroma_collection}' with {embedding_id()}")
     total = sum(ingest_file(p, root) for p in files)
+    if args.reset:
+        total += _restore_uploads()
     print(f"Done: {total} chunks, collection now holds {collection().count()}.")
     return 0
 

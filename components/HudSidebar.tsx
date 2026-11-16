@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, CircleCheck, CircleDashed, Cog, Gauge, Plus, Trash2, X } from "lucide-react";
+import { Activity, BookmarkPlus, CircleCheck, CircleDashed, Cog, FileStack, Gauge, History, Plus, Ruler, Trash2, X } from "lucide-react";
 import {
   METER_UNITS,
+  findReference,
   readingStatus,
   useRepairStore,
   type HudTab,
@@ -11,10 +12,14 @@ import {
   type MeterReading,
   type ReadingStatus,
 } from "@/store/useRepairStore";
+import { ReferencePanel, SchematicsPanel, HistoryPanel } from "@/components/HudPanels";
 
 const TABS: { id: HudTab; label: string; icon: typeof Gauge }[] = [
-  { id: "meter", label: "Multimeter", icon: Gauge },
-  { id: "screws", label: "Screw Map", icon: Cog },
+  { id: "meter", label: "Meter", icon: Gauge },
+  { id: "reference", label: "Reference", icon: Ruler },
+  { id: "schematics", label: "Schematics", icon: FileStack },
+  { id: "screws", label: "Screws", icon: Cog },
+  { id: "history", label: "History", icon: History },
 ];
 
 export function HudSidebar() {
@@ -60,19 +65,19 @@ export function HudSidebar() {
         } fixed inset-y-0 right-0 z-20 w-full max-w-md flex-col border-l-2 border-bench-border bg-bench-panel lg:static lg:z-auto lg:w-[26rem] lg:max-w-none xl:w-[30rem]`}
       >
         <div className="flex shrink-0 items-center gap-2 border-b-2 border-bench-border p-3">
-          <div role="tablist" className="flex flex-1 gap-2">
+          <div role="tablist" className="flex min-w-0 flex-1 gap-1.5">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 role="tab"
                 aria-selected={tab === id}
                 onClick={() => setHudTab(id)}
-                className={`flex h-14 flex-1 items-center justify-center gap-2 rounded-xl text-lg font-bold transition-colors ${
+                className={`flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-xs font-bold transition-colors ${
                   tab === id ? "bg-bench-accent text-black" : "bg-bench-raised text-bench-muted hover:text-bench-text"
                 }`}
               >
                 <Icon className="size-6" aria-hidden />
-                {label}
+                <span className="max-w-full truncate">{label}</span>
               </button>
             ))}
           </div>
@@ -86,7 +91,11 @@ export function HudSidebar() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {tab === "meter" ? <MultimeterPanel /> : <ScrewMapPanel />}
+          {tab === "meter" && <MultimeterPanel />}
+          {tab === "reference" && <ReferencePanel />}
+          {tab === "schematics" && <SchematicsPanel />}
+          {tab === "screws" && <ScrewMapPanel />}
+          {tab === "history" && <HistoryPanel />}
         </div>
       </aside>
     </>
@@ -104,7 +113,23 @@ const MODES: MeterMode[] = ["DCV", "ACV", "OHM", "DIODE", "CONT", "AMP"];
 function MultimeterPanel() {
   const readings = useRepairStore((s) => s.readings);
   const removeReading = useRepairStore((s) => s.removeReading);
+  const setReferenceDraft = useRepairStore((s) => s.setReferenceDraft);
+  const setHudTab = useRepairStore((s) => s.setHudTab);
   const [logging, setLogging] = useState(false);
+
+  const saveAsReference = (r: MeterReading) => {
+    if (r.value === null) return;
+    const spread = Math.max(Math.abs(r.value) * 0.05, 0.01);
+    const round = (n: number) => Math.round(n * 1000) / 1000;
+    setReferenceDraft({
+      testPoint: r.testPoint,
+      mode: r.mode,
+      min: round(r.value - spread),
+      max: round(r.value + spread),
+      source: "Measured on a known-good board",
+    });
+    setHudTab("reference");
+  };
   const latest = readings[0];
   const latestStatus = latest ? STATUS_STYLE[readingStatus(latest)] : STATUS_STYLE.unknown;
 
@@ -159,6 +184,14 @@ function MultimeterPanel() {
                 </div>
               </div>
               <button
+                onClick={() => saveAsReference(r)}
+                aria-label={`Save ${r.testPoint} as a known-good reference`}
+                title="Save as known-good reference (from a working board)"
+                className="grid size-12 shrink-0 place-items-center rounded-xl text-bench-muted hover:bg-bench-border hover:text-bench-ok"
+              >
+                <BookmarkPlus className="size-6" />
+              </button>
+              <button
                 onClick={() => removeReading(r.id)}
                 aria-label={`Delete reading for ${r.testPoint}`}
                 className="grid size-12 shrink-0 place-items-center rounded-xl text-bench-muted hover:bg-bench-border hover:text-bench-fault"
@@ -181,6 +214,7 @@ function parseNumber(text: string): number | null {
 function LogReadingForm({ onDone }: { onDone: () => void }) {
   const readings = useRepairStore((s) => s.readings);
   const addReading = useRepairStore((s) => s.addReading);
+  const references = useRepairStore((s) => s.references);
   const [testPoint, setTestPoint] = useState("");
   const [mode, setMode] = useState<MeterMode>(readings[0]?.mode ?? "DCV");
   const [value, setValue] = useState("");
@@ -191,6 +225,13 @@ function LogReadingForm({ onDone }: { onDone: () => void }) {
   const parsedValue = parseNumber(value);
   const canSave = testPoint.trim() !== "" && parsedValue !== null;
   const unit = METER_UNITS[mode];
+  const ref = testPoint.trim() ? findReference(references, testPoint, mode) : undefined;
+
+  useEffect(() => {
+    if (!ref) return;
+    setMin(String(ref.expected_min));
+    setMax(String(ref.expected_max));
+  }, [ref]);
 
   const pickRecent = (r: MeterReading) => {
     setTestPoint(r.testPoint);
@@ -232,8 +273,14 @@ function LogReadingForm({ onDone }: { onDone: () => void }) {
           value={testPoint}
           onChange={(e) => setTestPoint(e.target.value)}
           placeholder="e.g. 12V input, F7002, C5101"
+          list="reference-test-points"
           className={field}
         />
+        <datalist id="reference-test-points">
+          {references.map((r) => (
+            <option key={r.id} value={r.test_point} />
+          ))}
+        </datalist>
       </label>
 
       {recent.length > 0 && (
@@ -283,7 +330,9 @@ function LogReadingForm({ onDone }: { onDone: () => void }) {
       </label>
 
       <fieldset className="space-y-2">
-        <legend className="text-lg font-semibold text-bench-muted">Expected range (optional)</legend>
+        <legend className="text-lg font-semibold text-bench-muted">
+          Expected range {ref ? <span className="text-bench-ok">· from known-good reference</span> : "(optional)"}
+        </legend>
         <div className="flex items-center gap-2">
           <input value={min} onChange={(e) => setMin(e.target.value)} inputMode="decimal" placeholder="min" aria-label="Expected minimum" className={`${field} font-mono`} />
           <span className="text-xl text-bench-muted">–</span>

@@ -7,6 +7,7 @@ from langgraph.graph.message import add_messages
 
 class SessionInfo(TypedDict, total=False):
     device_model: str
+    board_revision: str
     current_step: str
     active_schematic: str
     readings: list[dict]
@@ -17,6 +18,8 @@ class RetrievedDoc(TypedDict):
     page: int | None
     text: str
     score: float
+    schematic_id: str | None
+    board_rev: str | None
 
 
 class AgentState(TypedDict, total=False):
@@ -27,6 +30,7 @@ class AgentState(TypedDict, total=False):
     route: str
 
     context: Annotated[list[RetrievedDoc], operator.add]
+    references: list[dict]
     trace: Annotated[list[str], operator.add]
 
     reply: str

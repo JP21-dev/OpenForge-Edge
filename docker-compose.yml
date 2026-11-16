@@ -37,7 +37,15 @@ services:
       EMBED_BASE_URL: ${EMBED_BASE_URL:-http://host.docker.internal:11434}
       EMBED_MODEL: ${EMBED_MODEL:-nomic-embed-text}
       EMBED_API_KEY: ${EMBED_API_KEY:-lemonade}
+      VISION_PROVIDER: ${VISION_PROVIDER:-ollama}
+      VISION_BASE_URL: ${VISION_BASE_URL:-http://host.docker.internal:11434}
+      VISION_MODEL: ${VISION_MODEL:-qwen3-vl:4b-instruct}
+      VISION_API_KEY: ${VISION_API_KEY:-lemonade}
+      VISION_NUM_CTX: ${VISION_NUM_CTX:-8192}
+      VISION_MAX_SIDE: ${VISION_MAX_SIDE:-1600}
       MANUALS_DIR: /app/manuals
+      UPLOADS_DIR: /app/uploads
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-100}
       RAG_TOP_K: ${RAG_TOP_K:-4}
       RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.6}
       CHROMA_HOST: chromadb
@@ -48,6 +56,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     volumes:
       - ./data/manuals:/app/manuals:ro
+      - uploads_data:/app/uploads
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -100,3 +109,5 @@ volumes:
     name: openforge_chromadb_data
   mongodb_data:
     name: openforge_mongodb_data
+  uploads_data:
+    name: openforge_uploads_data

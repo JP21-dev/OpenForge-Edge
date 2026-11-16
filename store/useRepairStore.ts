@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import type { AppMode, ReferenceValue } from "@/lib/api";
 
 export type ChatRole = "technician" | "copilot" | "system";
 
@@ -16,6 +17,8 @@ export interface CopilotSource {
   page: number | null;
   text: string;
   score: number;
+  schematic_id?: string | null;
+  board_rev?: string | null;
 }
 
 export type StepStatus = "pending" | "active" | "done" | "failed";
@@ -71,11 +74,32 @@ export interface ScrewSpec {
   removed: boolean;
 }
 
-export type HudTab = "meter" | "screws";
+export type HudTab = "meter" | "reference" | "schematics" | "screws" | "history";
+
+export interface ViewerTarget {
+  schematicId: string;
+  page: number;
+}
+
+export interface ReferenceDraft {
+  testPoint: string;
+  mode: MeterMode;
+  min: number;
+  max: number;
+  source: string;
+}
+
+const normalizePoint = (text: string) => text.trim().toLowerCase().replace(/\s+/g, " ");
+
+export function findReference(refs: ReferenceValue[], testPoint: string, mode: MeterMode) {
+  const key = normalizePoint(testPoint);
+  return refs.find((r) => r.mode === mode && normalizePoint(r.test_point) === key);
+}
 
 interface RepairState {
   sessionId: string;
   deviceModel: string;
+  boardRevision: string;
   activeSchematic: Schematic | null;
   diagnosticSteps: DiagnosticStep[];
   currentStepIndex: number;
@@ -88,7 +112,14 @@ interface RepairState {
   readings: MeterReading[];
   screws: ScrewSpec[];
 
+  appMode: AppMode;
+  modeLoading: string | null;
+  viewer: ViewerTarget | null;
+  references: ReferenceValue[];
+  referenceDraft: ReferenceDraft | null;
+
   setDeviceModel: (model: string) => void;
+  setBoardRevision: (rev: string) => void;
   setActiveSchematic: (schematic: Schematic | null) => void;
   setDiagnosticSteps: (steps: Omit<DiagnosticStep, "status">[]) => void;
   completeCurrentStep: (outcome?: "done" | "failed") => void;
@@ -103,6 +134,13 @@ interface RepairState {
   addReading: (reading: Omit<MeterReading, "id" | "takenAt">) => void;
   removeReading: (id: string) => void;
   toggleScrewRemoved: (id: string) => void;
+
+  setAppMode: (mode: AppMode, loading?: string | null) => void;
+  openViewer: (schematicId: string, page?: number) => void;
+  setViewerPage: (page: number) => void;
+  closeViewer: () => void;
+  setReferences: (refs: ReferenceValue[]) => void;
+  setReferenceDraft: (draft: ReferenceDraft | null) => void;
 
   resetSession: () => void;
 }
@@ -140,6 +178,7 @@ const PS5_SCREWS: ScrewSpec[] = [
 const initialSession = () => ({
   sessionId: uid(),
   deviceModel: "PlayStation 5",
+  boardRevision: "",
   activeSchematic: null as Schematic | null,
   diagnosticSteps: PS5_STEPS,
   currentStepIndex: 0,
@@ -162,8 +201,14 @@ export const useRepairStore = create<RepairState>()(
       ...initialSession(),
       hudOpen: true,
       hudTab: "meter",
+      appMode: "repair",
+      modeLoading: null,
+      viewer: null,
+      references: [],
+      referenceDraft: null,
 
       setDeviceModel: (deviceModel) => set({ deviceModel }),
+      setBoardRevision: (boardRevision) => set({ boardRevision: boardRevision.trim().toUpperCase() }),
       setActiveSchematic: (activeSchematic) => set({ activeSchematic }),
 
       setDiagnosticSteps: (steps) =>
@@ -216,13 +261,28 @@ export const useRepairStore = create<RepairState>()(
           screws: state.screws.map((s) => (s.id === id ? { ...s, removed: !s.removed } : s)),
         })),
 
-      resetSession: () => set(initialSession()),
+      setAppMode: (appMode, modeLoading = null) => set({ appMode, modeLoading }),
+      openViewer: (schematicId, page = 1) => set({ viewer: { schematicId, page } }),
+      setViewerPage: (page) => set((state) => (state.viewer ? { viewer: { ...state.viewer, page } } : {})),
+      closeViewer: () => set({ viewer: null }),
+      setReferences: (references) => set({ references }),
+      setReferenceDraft: (referenceDraft) => set({ referenceDraft }),
+
+      resetSession: () => set((state) => ({ ...initialSession(), deviceModel: state.deviceModel })),
     }),
     {
       name: "openforge-repair-session-v2",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
-      partialize: ({ isCopilotThinking: _thinking, ...rest }) => rest,
+      partialize: ({
+        isCopilotThinking: _thinking,
+        appMode: _mode,
+        modeLoading: _loading,
+        viewer: _viewer,
+        references: _refs,
+        referenceDraft: _draft,
+        ...rest
+      }) => rest,
     },
   ),
 );

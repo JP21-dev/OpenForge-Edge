@@ -1,12 +1,12 @@
 import { readingStatus, type ChatMessage, type CopilotSource, type MeterReading } from "@/store/useRepairStore";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_URL } from "@/lib/api";
 const MAX_HISTORY = 20;
 const MAX_READINGS = 10;
 
 interface CopilotContext {
   sessionId: string;
   deviceModel: string;
+  boardRevision?: string;
   currentStep?: string;
   schematic?: string;
   readings: MeterReading[];
@@ -42,6 +42,7 @@ export async function askCopilot(
     session: {
       session_id: ctx.sessionId,
       device_model: ctx.deviceModel,
+      board_revision: ctx.boardRevision || undefined,
       current_step: ctx.currentStep,
       active_schematic: ctx.schematic,
       history: history

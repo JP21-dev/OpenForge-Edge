@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, FileText, Loader2, Mic, SendHorizonal, Wrench } from "lucide-react";
+import { Bot, FileText, History, Loader2, Mic, SendHorizonal, Wrench, ZoomIn } from "lucide-react";
 import { selectCurrentStep, useRepairStore, type ChatMessage } from "@/store/useRepairStore";
 import { askCopilot } from "@/lib/copilot";
 
@@ -51,6 +51,7 @@ export function ChatPanel() {
         {
           sessionId: store.sessionId,
           deviceModel: store.deviceModel,
+          boardRevision: store.boardRevision,
           currentStep: selectCurrentStep(store)?.title,
           readings: store.readings,
           schematic: store.activeSchematic?.name,
@@ -145,6 +146,7 @@ export function ChatPanel() {
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
+  const openViewer = useRepairStore((s) => s.openViewer);
   if (message.role === "system") {
     return (
       <p className="mx-auto max-w-3xl rounded-lg border border-dashed border-bench-border px-4 py-2 text-center text-lg text-bench-muted">
@@ -176,20 +178,34 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         {message.content}
         {!!message.sources?.length && (
           <ul className="mt-4 space-y-2 border-t border-bench-border pt-3 text-base leading-snug md:text-lg">
-            {message.sources.map((s, i) => (
-              <li key={`${s.source}-${i}`} className="flex gap-2">
-                <FileText className="mt-0.5 size-5 shrink-0 text-bench-accent" aria-hidden />
-                <span>
-                  <span className="font-mono font-semibold text-bench-accent">
-                    {s.source}
-                    {s.page != null && ` p.${s.page}`}
+            {message.sources.map((s, i) => {
+              const Icon = s.source.startsWith("Past repair") ? History : FileText;
+              const schematicId = s.schematic_id;
+              return (
+                <li key={`${s.source}-${i}`} className="flex gap-2">
+                  <Icon className="mt-0.5 size-5 shrink-0 text-bench-accent" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="font-mono font-semibold text-bench-accent">
+                      {s.source}
+                      {s.page != null && ` p.${s.page}`}
+                      {s.board_rev && ` · ${s.board_rev}`}
+                    </span>
+                    <span className="line-clamp-3 text-bench-muted" title={s.text}>
+                      {s.text}
+                    </span>
                   </span>
-                  <span className="line-clamp-3 text-bench-muted" title={s.text}>
-                    {s.text}
-                  </span>
-                </span>
-              </li>
-            ))}
+                  {schematicId && (
+                    <button
+                      onClick={() => openViewer(schematicId, s.page ?? 1)}
+                      className="flex h-11 shrink-0 items-center gap-1 self-start rounded-lg border-2 border-bench-border px-3 text-base font-semibold hover:border-bench-accent"
+                    >
+                      <ZoomIn className="size-5" aria-hidden />
+                      View page
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

@@ -19,6 +19,35 @@ def detect_device(*texts: str | None) -> str | None:
     return None
 
 
+def device_slug(name: str | None) -> str | None:
+    if not name or not name.strip():
+        return None
+    return detect_device(name) or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or None
+
+
+def resolve_device(device_model: str | None, question: str | None = None) -> str | None:
+    return detect_device(device_model, question) or device_slug(device_model)
+
+
+ANY_REV = "any"
+
+
+def board_rev(value: str | None) -> str:
+    cleaned = re.sub(r"\s+", "", (value or "").upper())
+    return cleaned or ANY_REV
+
+
+def scope_filter(device: str | None, rev: str | None = None, doc_type: str | None = None) -> dict | None:
+    clauses: list[dict] = [{"doc_type": doc_type}] if doc_type else []
+    if device:
+        clauses.append({"device": device})
+    if rev and board_rev(rev) != ANY_REV:
+        clauses.append({"board_rev": {"$in": [board_rev(rev), ANY_REV]}})
+    if not clauses:
+        return None
+    return clauses[0] if len(clauses) == 1 else {"$and": clauses}
+
+
 class EmbeddingMismatch(RuntimeError):
     pass
 
@@ -65,12 +94,20 @@ def embedding_id() -> str:
     return f"{settings.embed_provider}:{settings.embed_model}"
 
 
-def collection():
+def _collection(name: str):
     return _client().get_or_create_collection(
-        settings.chroma_collection,
+        name,
         configuration={"hnsw": {"space": "cosine"}},
         metadata={"embedding": embedding_id()},
     )
+
+
+def collection():
+    return _collection(settings.chroma_collection)
+
+
+def history_collection():
+    return _collection(settings.history_collection)
 
 
 def check_embedding(col) -> None:
@@ -83,13 +120,16 @@ def check_embedding(col) -> None:
 
 
 def reset_collection() -> None:
-    try:
-        _client().delete_collection(settings.chroma_collection)
-    except Exception:
-        pass
+    for name in (settings.chroma_collection, settings.history_collection):
+        try:
+            _client().delete_collection(name)
+        except Exception:
+            pass
 
 
-def search(query: str, device: str | None, k: int | None = None) -> list[dict]:
+def search(
+    query: str, device: str | None, k: int | None = None, rev: str | None = None, doc_type: str | None = None
+) -> list[dict]:
     col = collection()
     if col.count() == 0:
         return []
@@ -97,7 +137,7 @@ def search(query: str, device: str | None, k: int | None = None) -> list[dict]:
     res = col.query(
         query_embeddings=[embed_query(query)],
         n_results=k or settings.rag_top_k,
-        where={"device": device} if device else None,
+        where=scope_filter(device, rev, doc_type),
     )
     docs = []
     for text, meta, dist in zip(res["documents"][0], res["metadatas"][0], res["distances"][0]):
@@ -106,12 +146,39 @@ def search(query: str, device: str | None, k: int | None = None) -> list[dict]:
             continue
         page = meta.get("page") or None
         title = meta.get("section") or ""
+        rev_label = meta.get("board_rev", ANY_REV)
         docs.append(
             {
                 "source": meta.get("source", "unknown") + (f" › {title}" if title else ""),
                 "page": page,
                 "text": re.sub(r"\s+", " ", text).strip(),
                 "score": score,
+                "schematic_id": meta.get("schematic_id") or None,
+                "board_rev": None if rev_label == ANY_REV else rev_label,
+            }
+        )
+    return docs
+
+
+def search_history(query: str, device: str | None, k: int = 3, rev: str | None = None) -> list[dict]:
+    col = history_collection()
+    if col.count() == 0:
+        return []
+    check_embedding(col)
+    res = col.query(query_embeddings=[embed_query(query)], n_results=k, where=scope_filter(device, rev))
+    docs = []
+    for text, meta, dist in zip(res["documents"][0], res["metadatas"][0], res["distances"][0]):
+        score = round(1 - dist, 3)
+        if score < settings.rag_min_score:
+            continue
+        docs.append(
+            {
+                "source": f"Past repair {meta.get('date', '')} · {meta.get('outcome', '')}".strip(),
+                "page": None,
+                "text": re.sub(r"\s+", " ", text).strip(),
+                "score": score,
+                "schematic_id": None,
+                "board_rev": meta.get("board_rev") if meta.get("board_rev") != ANY_REV else None,
             }
         )
     return docs

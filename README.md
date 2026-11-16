@@ -23,9 +23,14 @@ Built to run entirely on local edge devices, OpenForge Edge removes the reliance
 *   **Multimeter HUD & Diode Testing:** Log readings from any meter with large touch targets (test point, mode, value, optional expected range). Readings are flagged in/out of range and sent to the copilot, so you can ask "Is this reading bad?" or "What should I check next?".
 *   **Interactive Screw Maps:** Step-by-step teardown tracking to prevent hardware mix-ups during complex repairs.
 *   **Local RAG for Repair Manuals:** Ingest schematic PDFs, Markdown notes and JSON measurement files into ChromaDB with local `nomic-embed-text` embeddings. Answers cite the excerpts they used, and questions asking for a voltage, reading or resistance the knowledge base doesn't contain get "not in the knowledge base yet" instead of a guess.
-*   **Computer Vision Ingestion Pipeline** *(planned)*: OCR pipeline that processes XZZ schematic screenshots into structured JSON for the vector database.
+*   **Schematic Vision Ingest:** Upload schematic PDFs or phone photos of schematics in the Bench UI. A local vision model (`qwen3-vl:4b-instruct`) reads every page into rails, components, connectors and test points, which become searchable. Each page can be checked and corrected against the original image.
+*   **Repair / Ingest Mode Toggle:** One switch in the header swaps the GPU between the chat model (diagnosing boards) and the vision model (reading schematics), so both fit on a 6 GB card.
+*   **Schematic Viewer:** Answers that come from a schematic link straight to the cited page, with zoom and page navigation.
+*   **Board Revisions:** Set the board revision (e.g. `EDM-020`) for the session; schematics, reference values and answers are filtered to that revision plus anything marked for all revisions.
+*   **Known-Good Reference Values:** Save expected readings per test point and board revision, typed in or saved from a reading on a working board in one tap. New readings are checked against them automatically, and the copilot trusts them over the manuals.
+*   **Repair History:** Finish a job with its outcome, root cause and fix. Past repairs are stored in MongoDB, and the copilot brings up matching ones on later jobs ("a previous board with this symptom had…").
 
-> **Current status:** the knowledge base ships with sourced PS5 notes (board revisions, known ICs, no-video and no-power diagnosis, original-PS5 teardown and screw map). Add your own schematics and boardview measurements to grow it. Readings are logged by hand in the HUD; live USB/Bluetooth meter input is planned.
+> **Current status:** the knowledge base ships with sourced PS5 notes (board revisions, known ICs, no-video and no-power diagnosis, original-PS5 teardown and screw map). Add your own schematics, reference values and repair history to grow it. Readings are logged by hand in the HUD; live USB/Bluetooth meter input, boardview files and voice input are planned.
 
 ---
 
@@ -36,10 +41,16 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 ```
  Browser ──▶ frontend (Next.js :3000)
     │
-    └──────▶ backend (FastAPI :8000) ──▶ LangGraph: triage ─▶ schematic_rag ─▶ respond
-                 │        │                                         │
-                 │        └──▶ chromadb (:8001)                     └──▶ Ollama / Lemonade (host)
-                 └──▶ mongodb (:27017)
+    └──────▶ backend (FastAPI :8000)
+                 │
+                 ├─ Repair mode: LangGraph  triage ─▶ schematic_rag ─▶ respond ──▶ chat model
+                 │                                     (manuals, schematics,
+                 │                                      reference values, past repairs)
+                 ├─ Ingest mode: upload ─▶ page images ─▶ vision model ─▶ chunks
+                 │
+                 ├──▶ chromadb (:8001)   manual + schematic chunks, repair history
+                 ├──▶ mongodb (:27017)   schematics, reference values, repairs, mode
+                 └──▶ Ollama / Lemonade on the host (chat, vision, embeddings)
 ```
 
 ### Frontend (The Bench UI)
@@ -50,31 +61,42 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 
 ### Backend (Multi-Agent Routing)
 *   **API:** FastAPI (running via Uvicorn)
-*   **Agent Framework:** LangGraph. A `TriageAgent` identifies the issue and routes to specialist agents (currently `SchematicRAGAgent`), then a responder writes the final answer.
+*   **Agent Framework:** LangGraph. A `TriageAgent` identifies the issue and routes to specialist agents (currently `SchematicRAGAgent`, which pulls manual and schematic excerpts, known-good values and past repairs), then a responder writes the final answer.
+*   **Vision pipeline:** PDFs are rendered with `pypdfium2` and photos normalised with Pillow (HEIC supported). A background worker sends each page to the vision model while Ingest mode is on.
 *   **Local AI Engine:** AMD Lemonade (`LLM_PROVIDER=lemonade`, via the OpenAI-compatible API) or Ollama (`ChatOllama`). Embeddings use the same engine (`EMBED_PROVIDER`).
 
 ### Data Layer
-*   **Document Store:** MongoDB 8
+*   **Document Store:** MongoDB 8 (schematic jobs and page text, reference values, repair history, current mode)
+*   **Uploads:** page images in the `openforge_uploads_data` Docker volume
 *   **Vector Database:** ChromaDB
 
 ### Project Structure
 ```
 ├── app/                    Next.js layout, page, global styles
-├── components/             ChatPanel, HudSidebar, SessionHeader
-├── lib/copilot.ts          Streaming client for the backend API
+├── components/             ChatPanel, HudSidebar, HudPanels, SessionHeader, ModeToggle,
+│                           IngestPanel, SchematicViewer, FinishRepairDialog
+├── lib/copilot.ts          Streaming chat client
+├── lib/api.ts              REST client (mode, schematics, reference values, repairs)
 ├── store/useRepairStore.ts Zustand repair-session store
 ├── backend/
 │   ├── main.py             FastAPI app and endpoints
 │   ├── graph.py            LangGraph wiring
 │   ├── agents/             triage, schematic_rag, responder + registry
-│   ├── knowledge.py        Embeddings, device detection, ChromaDB search
+│   ├── knowledge.py        Embeddings, device and revision filters, ChromaDB search
 │   ├── ingest.py           Loads data/manuals into ChromaDB
+│   ├── schematics.py       Upload, page rendering, vision worker, viewer endpoints
+│   ├── vision.py           Vision model client (Ollama or OpenAI-compatible)
+│   ├── mode.py             Repair / Ingest switch and model loading
+│   ├── reference.py        Known-good reference values
+│   ├── history.py          Repair history
+│   ├── db.py               MongoDB connection
 │   ├── llm.py, config.py, state.py
 │   └── requirements.txt
 ├── data/manuals/<device>/  Knowledge base source files (e.g. ps5/)
 ├── scripts/
 │   ├── setup-lemonade.ps1  Lemonade setup for Windows
-│   └── setup-lemonade.sh   Lemonade setup for Linux
+│   ├── setup-lemonade.sh   Lemonade setup for Linux
+│   └── offline-check.ps1   Checks everything is local before going offline
 ├── Dockerfile.frontend
 ├── Dockerfile.backend
 ├── docker-compose.yml
@@ -101,13 +123,17 @@ cd OpenForge-Edge
 ```
 
 ### 2. Install the local models
-Start Ollama, then pull the chat model (~4.7 GB) and the embedding model (~274 MB):
+Start Ollama, then pull the chat model (~4.7 GB), the embedding model (~274 MB) and the vision model for reading schematics (~3.3 GB):
 ```bash
 ollama pull qwen2.5:7b
 ```
 ```bash
 ollama pull nomic-embed-text
 ```
+```bash
+ollama pull qwen3-vl:4b-instruct
+```
+Use the `-instruct` tag: the plain `qwen3-vl:4b` tag is the reasoning variant, which thinks for thousands of tokens before transcribing a page.
 Check that Ollama is serving it:
 ```bash
 ollama list
@@ -157,7 +183,7 @@ curl http://localhost:8000/api/health
 ```
 A healthy stack returns:
 ```json
-{"status":"ok","model":"qwen2.5:7b","provider":"ollama","llm_base_url":"http://host.docker.internal:11434","embed_model":"nomic-embed-text","knowledge_chunks":14,"services":{"chromadb":"ok","mongodb":"ok"}}
+{"status":"ok","model":"qwen2.5:7b","provider":"ollama","vision_model":"qwen3-vl:4b-instruct","mode":"repair","llm_base_url":"http://host.docker.internal:11434","embedding":"ollama:nomic-embed-text","knowledge_chunks":14,"knowledge_built_with":"ollama:nomic-embed-text","services":{"chromadb":"ok","mongodb":"ok"}}
 ```
 `knowledge_chunks` should be above 0. Then open http://localhost:3000 and ask the copilot something, e.g. *"PS5 beeps 3 times when I plug it in"*.
 
@@ -168,7 +194,7 @@ Stop the stack (data is kept):
 ```bash
 docker compose down
 ```
-Stop and **delete all stored data** (ChromaDB vectors and MongoDB):
+Stop and **delete all stored data** (ChromaDB vectors, MongoDB, uploaded schematics, reference values and repair history):
 ```bash
 docker compose down -v
 ```
@@ -222,6 +248,60 @@ The backend container mounts this folder read-only at `/app/manuals`.
 **Private files:** PDFs under `data/manuals/` and any `data/manuals/**/private/` folder are git-ignored so proprietary schematics are never pushed. Markdown and JSON files are committed; keep only content you are allowed to share in them.
 
 **Accuracy:** only add values you trust (service manuals, boardview, measurements from known-good boards). The copilot will repeat whatever is in the knowledge base.
+
+**Board revisions:** add `board_rev: EDM-020` to a file's front matter to limit it to one revision. Files without it apply to every revision.
+
+---
+
+## 📐 Schematics, Reference Values and Repair History
+
+### Repair and Ingest modes
+The header has a **Repair / Ingest** switch. Only one large model fits in a 6 GB GPU at a time, and you won't be reading schematics while you're probing a board, so the switch swaps them:
+
+| Mode | Model loaded | What you can do |
+|---|---|---|
+| Repair | Chat model (`LLM_MODEL`) | Chat with the copilot, log readings, view schematics |
+| Ingest | Vision model (`VISION_MODEL`) | Upload schematics and photos; the queue is read page by page |
+
+Switching unloads the current model from the GPU and preloads the other (Ollama; with Lemonade the backend calls its load/unload endpoints). The chat is disabled in Ingest mode, and queued pages wait until Ingest mode is on. The mode is stored in MongoDB, so it survives restarts.
+
+### Uploading schematics
+1. Switch to **Ingest**.
+2. Drop PDFs or photos into the upload box. Several photos uploaded together become the pages of one schematic, in the order added.
+3. Enter a title, the device and the board revision (leave the revision empty if the sheet covers every revision). Tick **Dense sheet** for busy pages with small text: the page is read in four overlapping quarters, about four times slower.
+4. Watch the progress bar. On an RTX 2060 a normal page takes roughly a minute.
+
+PDFs are rendered at up to 3000 px, and any embedded PDF text is passed to the vision model as a spelling hint. Photos are rotated using their EXIF data. Uploads are limited to `UPLOAD_MAX_MB` per file and 200 pages.
+
+### Checking what the model read
+Open a schematic (**View and check**, the HUD's **Schematics** tab, or **View page** on a cited answer), then press **Extracted text**. The panel shows exactly what the copilot will search. Fix anything misread and press **Save**: the page is re-indexed immediately and marked as edited by you. **Re-read** queues the page for the vision model again.
+
+Vision models make mistakes on dense schematics. Answers that rely on a schematic page tell you which page to confirm on, and edited pages are labelled as checked by a technician.
+
+### Known-good reference values
+The HUD's **Reference** tab holds expected values per test point, meter mode and board revision:
+*   **Add reference value** to type one in (from a schematic, service manual or boardview).
+*   On a working board, log a reading and tap the bookmark icon next to it: the value is saved as a ±5% range you can adjust.
+
+When you log a reading on a test point that has a reference, the expected range fills in automatically and the reading is marked in or out of range. The copilot receives all reference values for the current board and treats them as more reliable than the manuals.
+
+### Repair history
+Press the **flag** button in the header to finish a job: pick the outcome (fixed, not fixed, parked), confirm the symptom, and add the root cause, fix and parts. The job is saved to MongoDB with its readings and steps, embedded into the `repair_history` collection, and the session resets. On later jobs with a similar symptom the copilot cites the matching past repair as a lead. The HUD's **History** tab lists past repairs for the current device.
+
+### Rebuilding the index
+`python ingest.py --reset` rebuilds the manuals collection and then restores every uploaded schematic page and past repair from MongoDB, so nothing is lost when you change the embedding model.
+
+---
+
+## ✈️ Running Fully Offline
+
+Everything runs locally once the models and Docker images are downloaded. Before taking the bench offline:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\offline-check.ps1
+```
+It checks that the chat, embedding and vision models are downloaded, the Docker images are built, every service is healthy, and the model server has no connections outside this machine. Then turn off Wi-Fi, run it again, and ask the copilot a question to confirm.
+
+Telemetry is disabled for Next.js (`NEXT_TELEMETRY_DISABLED`) and ChromaDB (`ANONYMIZED_TELEMETRY`). The Bench UI uses system fonts and loads nothing from the internet.
 
 ---
 
@@ -278,6 +358,12 @@ All settings live in `.env` (read by Docker Compose) or as environment variables
 | `EMBED_PROVIDER` | `ollama` | `lemonade`, `ollama` or `openai`. Changing it requires `python ingest.py --reset` |
 | `EMBED_BASE_URL` / `EMBED_MODEL` | `http://host.docker.internal:11434` / `nomic-embed-text` | Embedding server and model. Lemonade: `…:13305/api/v1` / `nomic-embed-text-v1-GGUF` |
 | `EMBED_API_KEY` | `lemonade` | API key for an OpenAI-compatible embedding server |
+| `VISION_PROVIDER` | `ollama` | `ollama`, `lemonade` or `openai` for the Ingest-mode vision model |
+| `VISION_BASE_URL` / `VISION_MODEL` | `http://host.docker.internal:11434` / `qwen3-vl:4b-instruct` | Vision server and model. Lemonade: `…:13305/api/v1` / `Qwen2.5-VL-7B-Instruct-GGUF` |
+| `VISION_NUM_CTX` | `8192` | Ollama only: context window for page reads |
+| `VISION_MAX_SIDE` | `1600` | Longest side, in pixels, of the image sent to the vision model |
+| `VISION_MAX_TOKENS` | `1800` | Maximum length of one page transcription |
+| `UPLOAD_MAX_MB` | `100` | Maximum size of one uploaded file |
 | `RAG_TOP_K` | `4` | Maximum excerpts retrieved per question |
 | `RAG_MIN_SCORE` | `0.6` | Minimum similarity (0–1) for an excerpt to be used; raise it if answers pull in unrelated sections |
 | `CHROMA_VERSION` / `CHROMA_COLLECTION` | `1.5.9` / `repair_manuals` | ChromaDB image tag and collection name |
@@ -306,7 +392,7 @@ After changing backend settings, restart it with `docker compose up -d backend`.
 | Radeon GPU (Vulkan / ROCm) | `Qwen3-8B-GGUF` | Keep `LLM_ENABLE_THINKING=false` for fast answers |
 | Smaller GPU or CPU only | `Qwen3-4B-Instruct-2507-GGUF` | ~2.5 GB |
 
-Embeddings use `nomic-embed-text-v1-GGUF` on all hardware. Run `lemonade list` to see every model Lemonade offers and `lemonade backends` to see what your machine supports.
+Embeddings use `nomic-embed-text-v1-GGUF` on all hardware. For Ingest mode, `.env.lemonade.example` uses the vision model `Qwen2.5-VL-7B-Instruct-GGUF` (or `Gemma-3-4b-it-GGUF` on smaller GPUs). Run `lemonade list` to see every model Lemonade offers and `lemonade backends` to see what your machine supports.
 
 ### Setup
 
@@ -326,7 +412,7 @@ Linux:
 ./scripts/setup-lemonade.sh
 ```
 
-To set up by hand instead: copy `.env.lemonade.example` to `.env`, pick `LLM_MODEL` from the table above, and run `lemonade pull <model>` for the chat model and `nomic-embed-text-v1-GGUF`.
+To set up by hand instead: copy `.env.lemonade.example` to `.env`, pick `LLM_MODEL` from the table above, and run `lemonade pull <model>` for the chat model and `nomic-embed-text-v1-GGUF`. For schematic ingest, also pull the vision model named in `VISION_MODEL`.
 
 **3. Start the stack and build the knowledge base** with Lemonade embeddings:
 ```bash
@@ -347,6 +433,7 @@ Expect `"provider":"lemonade"`, `"embedding":"lemonade:nomic-embed-text-v1-GGUF"
 *   **Reasoning models:** Qwen3 models think before answering by default. The backend sends `enable_thinking: false` (Lemonade's request option) unless `LLM_ENABLE_THINKING=true`, so answers start streaming immediately.
 *   **JSON triage:** triage asks for a JSON route decision. Lemonade's `response_format` support depends on the backend, so `.env.lemonade.example` sets `LLM_JSON_MODE=false` and relies on the prompt instead; the backend falls back to keyword routing if a reply isn't valid JSON.
 *   **Embeddings:** with `EMBED_PROVIDER=lemonade`, `backend/knowledge.py` calls Lemonade's `/api/v1/embeddings` through the OpenAI client. The `search_document:` / `search_query:` prefixes that nomic models expect are added automatically.
+*   **Vision and mode switching:** with `VISION_PROVIDER=lemonade`, page images are sent to Lemonade's chat completions as `image_url` parts. Switching between Repair and Ingest calls Lemonade's `/api/v1/unload` and `/api/v1/load` so only one model holds the GPU or NPU at a time.
 *   **Embedding safety check:** the knowledge base records which provider and model built it. If you switch between Ollama and Lemonade without re-ingesting, ingest refuses to mix them and searches return no excerpts, with a log message telling you to run `python ingest.py --reset`.
 
 ### Docker networking
@@ -379,6 +466,18 @@ docker compose exec backend python ingest.py --reset
 | `GET` | `/api/health` | Model info and ChromaDB/MongoDB connectivity |
 | `POST` | `/api/chat` | Returns the full answer as one JSON response |
 | `POST` | `/api/chat/stream` | Streams newline-delimited JSON events (used by the Bench UI) |
+| `GET` / `POST` | `/api/mode` | Current mode, or switch with `{"mode": "repair" \| "ingest"}` |
+| `POST` | `/api/schematics` | Multipart upload: `files`, `title`, `device_model`, `board_revision`, `dense` |
+| `GET` | `/api/schematics` | List schematics (`?device_model=&board_revision=`) |
+| `GET` / `DELETE` | `/api/schematics/{id}` | Schematic with page text, or delete it and its chunks |
+| `GET` | `/api/schematics/{id}/pages/{n}/image` | Page image |
+| `PUT` | `/api/schematics/{id}/pages/{n}` | Save corrected page text `{"text": "..."}` and re-index |
+| `POST` | `/api/schematics/{id}/pages/{n}/rescan`, `/api/schematics/{id}/retry` | Re-read one page, or retry failed pages |
+| `GET` / `POST` | `/api/reference` | List or save known-good values |
+| `DELETE` | `/api/reference/{id}` | Delete a reference value |
+| `GET` | `/api/boards?device_model=` | Board revisions seen for a device |
+| `GET` / `POST` | `/api/repairs` | List or save repair history |
+| `DELETE` | `/api/repairs/{id}` | Delete a repair record |
 
 Request body for both chat endpoints:
 ```json
@@ -386,6 +485,7 @@ Request body for both chat endpoints:
   "message": "PP3V3_S2 reads 2.4V, what should it be?",
   "session": {
     "device_model": "Pixel 7",
+    "board_revision": "REV-B",
     "current_step": "Measure main rail",
     "active_schematic": "logic-board-rev-b",
     "history": [{ "role": "technician", "content": "..." }, { "role": "copilot", "content": "..." }]
@@ -431,7 +531,13 @@ Agents are registered in `backend/agents/__init__.py`. Nothing in `graph.py` nee
 | Port already in use | Change the matching `*_PORT` variable in `.env` |
 | `knowledge_chunks` is `0` or answers never show sources | Run `docker compose exec backend python ingest.py` |
 | Ingest fails with a model error | Pull the embedding model on the host: `ollama pull nomic-embed-text` |
-| Answers say "not in the knowledge base yet" | The value isn't in `data/manuals/`. Add a trusted source and re-run ingest |
+| Answers say "not in the knowledge base yet" | The value isn't in the manuals, schematics or reference values. Add it in the HUD's **Reference** tab |
+| Chat says *"Ingest mode is on"* | Switch the header toggle back to **Repair** |
+| Schematic pages stay "Queued" | Pages are only read in **Ingest** mode. Check `docker compose logs backend` for vision errors |
+| A page fails with *"model not found"* | Pull the vision model: `ollama pull qwen3-vl:4b-instruct` |
+| Pages take many minutes | Make sure `VISION_MODEL` is the `-instruct` tag, untick **Dense sheet**, or lower `VISION_MAX_SIDE` |
+| Vision model misreads small text | Re-upload with **Dense sheet**, or correct the page in **Extracted text** |
+| Upload rejected as too large | Raise `UPLOAD_MAX_MB` and restart the backend |
 | Old chat history after a restart | Use the reset button in the Bench UI header (history is stored in the browser) |
 
 ---

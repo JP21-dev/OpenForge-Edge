@@ -30,7 +30,19 @@ class Settings:
     embed_model: str = os.getenv("EMBED_MODEL", "nomic-embed-text")
     embed_api_key: str = os.getenv("EMBED_API_KEY", "lemonade")
 
+    vision_provider: str = os.getenv("VISION_PROVIDER", "ollama")
+    vision_base_url: str = os.getenv("VISION_BASE_URL", "http://localhost:11434")
+    vision_model: str = os.getenv("VISION_MODEL", "qwen3-vl:4b-instruct")
+    vision_api_key: str = os.getenv("VISION_API_KEY", "lemonade")
+    vision_num_ctx: int = int(os.getenv("VISION_NUM_CTX", "8192"))
+    vision_max_side: int = int(os.getenv("VISION_MAX_SIDE", "1600"))
+    vision_max_tokens: int = int(os.getenv("VISION_MAX_TOKENS", "1800"))
+    vision_timeout: float = float(os.getenv("VISION_TIMEOUT", "600"))
+
     manuals_dir: str = os.getenv("MANUALS_DIR", "../data/manuals")
+    uploads_dir: str = os.getenv("UPLOADS_DIR", "./uploads")
+    upload_max_mb: int = int(os.getenv("UPLOAD_MAX_MB", "100"))
+    history_collection: str = os.getenv("HISTORY_COLLECTION", "repair_history")
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "4"))
     rag_min_score: float = float(os.getenv("RAG_MIN_SCORE", "0.6"))
 

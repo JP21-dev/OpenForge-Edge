@@ -21,7 +21,8 @@ Built to run entirely on local edge devices, OpenForge Edge removes the reliance
 *   **AMD Lemonade Ready:** Switch the whole AI stack (chat and embeddings) to Lemonade with `.env.lemonade.example` and a setup script. Runs on Ryzen AI NPU + iGPU (Hybrid) or Radeon GPUs; Ollama (`qwen2.5:7b`) remains available for other hardware.
 *   **Streaming Bench Chat:** Large, high-contrast chat built for use mid-repair. Answers stream in as they are generated, with live agent status ("Triaging issue…", "Searching schematics…") and cited manual excerpts.
 *   **Multimeter HUD & Diode Testing:** Log readings from any meter with large touch targets (test point, mode, value, optional expected range). Readings are flagged in/out of range and sent to the copilot, so you can ask "Is this reading bad?" or "What should I check next?".
-*   **Interactive Screw Maps:** Step-by-step teardown tracking to prevent hardware mix-ups during complex repairs.
+*   **Device Profiles:** PlayStation 5 and Xbox Series X built in, plus any other device by name. Switching devices keeps a separate session for each, so you can flip between benches and pick up where you left off.
+*   **Repair Procedures and 2D Screw Maps:** Choose the repair (no-power diagnosis, fan cleaning, APU repaste, optical drive, SSD access). Each step shows a 2D layout of that stage with only the screws that step removes, colour-coded by length. Tap screws as they come out; the next step unlocks when they're all out.
 *   **Local RAG for Repair Manuals:** Ingest schematic PDFs, Markdown notes and JSON measurement files into ChromaDB with local `nomic-embed-text` embeddings. Answers cite the excerpts they used, and questions asking for a voltage, reading or resistance the knowledge base doesn't contain get "not in the knowledge base yet" instead of a guess.
 *   **Schematic Vision Ingest:** Upload schematic PDFs or phone photos of schematics in the Bench UI. A local vision model (`qwen3-vl:4b-instruct`) reads every page into rails, components, connectors and test points, which become searchable. Each page can be checked and corrected against the original image.
 *   **Repair / Ingest Mode Toggle:** One switch in the header swaps the GPU between the chat model (diagnosing boards) and the vision model (reading schematics), so both fit on a 6 GB card.
@@ -30,7 +31,7 @@ Built to run entirely on local edge devices, OpenForge Edge removes the reliance
 *   **Known-Good Reference Values:** Save expected readings per test point and board revision, typed in or saved from a reading on a working board in one tap. New readings are checked against them automatically, and the copilot trusts them over the manuals.
 *   **Repair History:** Finish a job with its outcome, root cause and fix. Past repairs are stored in MongoDB, and the copilot brings up matching ones on later jobs ("a previous board with this symptom had…").
 
-> **Current status:** the knowledge base ships with sourced PS5 notes (board revisions, known ICs, no-video and no-power diagnosis, original-PS5 teardown and screw map). Add your own schematics, reference values and repair history to grow it. Readings are logged by hand in the HUD; live USB/Bluetooth meter input, boardview files and voice input are planned.
+> **Current status:** the knowledge base ships with sourced notes for the PS5 (board revisions, chips identified in iFixit's teardown, no-video and no-power diagnosis, teardown and liquid metal service) and the Xbox Series X (board and chip overview, full disassembly with screw sizes, from iFixit). Add your own schematics, reference values and repair history to grow it. Readings are logged by hand in the HUD; live USB/Bluetooth meter input, boardview files and voice input are planned.
 
 ---
 
@@ -73,10 +74,11 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 ### Project Structure
 ```
 ├── app/                    Next.js layout, page, global styles
-├── components/             ChatPanel, HudSidebar, HudPanels, SessionHeader, ModeToggle,
+├── components/             ChatPanel, HudSidebar, HudPanels, ScrewMap, DevicePicker, SessionHeader, ModeToggle,
 │                           IngestPanel, SchematicViewer, FinishRepairDialog
 ├── lib/copilot.ts          Streaming chat client
 ├── lib/api.ts              REST client (mode, schematics, reference values, repairs)
+├── lib/devices.ts          Device profiles: procedures, steps, screw groups, 2D layouts
 ├── store/useRepairStore.ts Zustand repair-session store
 ├── backend/
 │   ├── main.py             FastAPI app and endpoints
@@ -92,7 +94,7 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 │   ├── db.py               MongoDB connection
 │   ├── llm.py, config.py, state.py
 │   └── requirements.txt
-├── data/manuals/<device>/  Knowledge base source files (e.g. ps5/)
+├── data/manuals/<device>/  Knowledge base source files (ps5/, xbox-series-x/)
 ├── scripts/
 │   ├── setup-lemonade.ps1  Lemonade setup for Windows
 │   ├── setup-lemonade.sh   Lemonade setup for Linux
@@ -243,7 +245,30 @@ The backend container mounts this folder read-only at `/app/manuals`.
     }
     ```
 
-**Device detection:** a question is searched within a device's documents when the session's device name or the question mentions it (for PS5: "PS5", "PlayStation 5", "CFI-1…", "EDM-0…"). Add aliases for new devices in `DEVICE_ALIASES` in `backend/knowledge.py`.
+**Device detection:** a question is searched within a device's documents when the session's device name or the question mentions it (PS5: "PS5", "PlayStation 5", "CFI-1…", "EDM-0…"; Xbox Series X: "Xbox Series X", "Series X", "XSX"). Add aliases for new devices in `DEVICE_ALIASES` in `backend/knowledge.py`; the key must match the device's folder name in `data/manuals/`.
+
+---
+
+## 🔩 Devices, Repairs and Screw Maps
+
+Tap the device name in the header to switch between the built-in profiles or type any other device. Each device keeps its own session (chat, readings, board revision, repair and screw progress), and switching back restores it.
+
+The wrench chip next to the step counter picks the repair. Each repair only includes the steps it needs: fan cleaning on an Xbox Series X is three steps and five screws, while a no-power diagnosis opens the console down to the board first.
+
+The HUD's **Screws** tab follows the current step:
+*   A 2D drawing of that stage of the device, with a marker for every screw the step removes, colour-coded by group.
+*   A list of the same screws with head type, length and count. Tap a marker or a row to mark screws removed.
+*   When every screw in the step is out, **All out: next step** advances the procedure. **All steps** lists the whole repair and lets you jump to any step.
+
+Screw counts and lengths come from iFixit's guides, linked in the panel. The drawings are simplified and positions are approximate (iFixit's photos are not bundled, so the app stays offline): match screws by colour and length.
+
+| Device | Repairs |
+|---|---|
+| PlayStation 5 (original) | No power / no video diagnosis, fan cleaning, APU liquid metal service |
+| Xbox Series X | No power / no video diagnosis, fan cleaning, optical drive service, internal SSD access |
+| Any other device | General diagnosis steps, no screw map |
+
+**Adding a device:** add a profile to `DEVICES` in `lib/devices.ts` (views drawn on a 100 × 160 grid, screw groups with positions, procedures whose steps list screw group ids), add its aliases to `DEVICE_ALIASES`, and put its notes in `data/manuals/<device-id>/`.
 
 **Private files:** PDFs under `data/manuals/` and any `data/manuals/**/private/` folder are git-ignored so proprietary schematics are never pushed. Markdown and JSON files are committed; keep only content you are allowed to share in them.
 
@@ -538,7 +563,7 @@ Agents are registered in `backend/agents/__init__.py`. Nothing in `graph.py` nee
 | Pages take many minutes | Make sure `VISION_MODEL` is the `-instruct` tag, untick **Dense sheet**, or lower `VISION_MAX_SIDE` |
 | Vision model misreads small text | Re-upload with **Dense sheet**, or correct the page in **Extracted text** |
 | Upload rejected as too large | Raise `UPLOAD_MAX_MB` and restart the backend |
-| Old chat history after a restart | Use the reset button in the Bench UI header (history is stored in the browser) |
+| Old chat history after a restart | Use the reset button in the Bench UI header (history is stored in the browser, one session per device) |
 
 ---
 

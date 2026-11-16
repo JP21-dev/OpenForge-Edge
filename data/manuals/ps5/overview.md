@@ -26,7 +26,7 @@ SPI NOR (BIOS) flash: marked 25Q16JVNIM (Winbond W25Q16JV family, 16 Mbit). Sits
 
 GDDR6 memory: Micron MT61K512M32KPA-14C, package marking D9XKV. When replacing, match the D9XKV marking; differing date-code prefixes are normal.
 
-Sony custom ICs marked CXD9006x (for example CXD90062GG, CX090061GG) appear in many repair threads. Forum users associate them with the southbridge and SSD controller, but no public source confirms which marking is which; check the part on your board.
+Sony custom ICs marked CXD9006x appear in many repair threads. iFixit's teardown identifies CXD90060GG as the APU, CXD90062GG as the SSD controller and CXD90061GG as the I/O controller (southbridge, marked "likely"). See "PS5 board components identified in the iFixit teardown".
 
 TLV62090RGTT: Texas Instruments step-down (buck) converter used on the board; technicians check its output when diagnosing no-power faults.
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Bot, FileText, History, Loader2, Mic, SendHorizonal, Wrench, ZoomIn } from "lucide-react";
-import { selectCurrentStep, useRepairStore, type ChatMessage } from "@/store/useRepairStore";
+import { selectCurrentStep, selectProcedure, useRepairStore, type ChatMessage } from "@/store/useRepairStore";
 import { askCopilot } from "@/lib/copilot";
 
 const QUICK_PROMPTS = [
@@ -52,7 +52,7 @@ export function ChatPanel() {
           sessionId: store.sessionId,
           deviceModel: store.deviceModel,
           boardRevision: store.boardRevision,
-          currentStep: selectCurrentStep(store)?.title,
+          currentStep: `${selectProcedure(store).title}: step ${store.currentStepIndex + 1}, ${selectCurrentStep(store)?.title ?? ""}`,
           readings: store.readings,
           schematic: store.activeSchematic?.name,
         },

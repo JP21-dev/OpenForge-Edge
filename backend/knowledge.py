@@ -8,6 +8,7 @@ from config import OPENAI_COMPATIBLE, settings
 
 DEVICE_ALIASES: dict[str, list[str]] = {
     "ps5": ["ps5", "playstation 5", "playstation5", "cfi-1", "cfi-2", "edm-0"],
+    "xbox-series-x": ["xbox series x", "series x", "xsx", "project scarlett"],
 }
 
 

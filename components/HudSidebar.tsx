@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, BookmarkPlus, CircleCheck, CircleDashed, Cog, FileStack, Gauge, History, Plus, Ruler, Trash2, X } from "lucide-react";
+import { Activity, BookmarkPlus, Cog, FileStack, Gauge, History, Plus, Ruler, Trash2, X } from "lucide-react";
 import {
   METER_UNITS,
   findReference,
@@ -13,6 +13,7 @@ import {
   type ReadingStatus,
 } from "@/store/useRepairStore";
 import { ReferencePanel, SchematicsPanel, HistoryPanel } from "@/components/HudPanels";
+import { ScrewMapPanel } from "@/components/ScrewMap";
 
 const TABS: { id: HudTab; label: string; icon: typeof Gauge }[] = [
   { id: "meter", label: "Meter", icon: Gauge },
@@ -353,59 +354,5 @@ function LogReadingForm({ onDone }: { onDone: () => void }) {
         </button>
       </div>
     </form>
-  );
-}
-
-function ScrewMapPanel() {
-  const screws = useRepairStore((s) => s.screws);
-  const toggle = useRepairStore((s) => s.toggleScrewRemoved);
-  const removed = screws.filter((s) => s.removed).reduce((n, s) => n + s.count, 0);
-  const total = screws.reduce((n, s) => n + s.count, 0);
-
-  return (
-    <div className="space-y-4">
-      <div className="grid aspect-[4/3] place-items-center rounded-2xl border-2 border-dashed border-bench-border bg-bench-bg text-center text-lg text-bench-muted">
-        <div>
-          <Cog className="mx-auto mb-2 size-10" aria-hidden />
-          Screw map image
-          <br />
-          <span className="text-base">(load from device profile)</span>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between text-xl font-bold">
-        <span>Removed</span>
-        <span className="font-mono tabular-nums text-bench-accent">
-          {removed}/{total}
-        </span>
-      </div>
-
-      <ul className="space-y-3">
-        {screws.map((s) => (
-          <li key={s.id}>
-            <button
-              onClick={() => toggle(s.id)}
-              aria-pressed={s.removed}
-              className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-colors ${
-                s.removed ? "border-bench-ok bg-bench-ok/10" : "border-bench-border bg-bench-raised hover:border-bench-accent"
-              }`}
-            >
-              {s.removed ? (
-                <CircleCheck className="size-9 shrink-0 text-bench-ok" aria-hidden />
-              ) : (
-                <CircleDashed className="size-9 shrink-0 text-bench-muted" aria-hidden />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xl font-semibold">{s.position}</div>
-                <div className="font-mono text-lg text-bench-muted">
-                  {s.head} · {s.length}
-                </div>
-              </div>
-              <span className="font-mono text-3xl font-black">×{s.count}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

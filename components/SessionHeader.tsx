@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { Check, CircuitBoard, Cpu, FileText, Flag, PanelRightClose, PanelRightOpen, RotateCcw, X } from "lucide-react";
-import { selectCurrentStep, useRepairStore } from "@/store/useRepairStore";
+import { selectCurrentStep, selectDevice, useRepairStore } from "@/store/useRepairStore";
 import { api } from "@/lib/api";
+import { DevicePicker, ProcedurePicker } from "@/components/DevicePicker";
 import { ModeToggle } from "@/components/ModeToggle";
 import { FinishRepairDialog } from "@/components/FinishRepairDialog";
 
 export function SessionHeader() {
-  const deviceModel = useRepairStore((s) => s.deviceModel);
-  const setDeviceModel = useRepairStore((s) => s.setDeviceModel);
   const schematic = useRepairStore((s) => s.activeSchematic);
   const steps = useRepairStore((s) => s.diagnosticSteps);
   const stepIndex = useRepairStore((s) => s.currentStepIndex);
@@ -20,53 +19,19 @@ export function SessionHeader() {
   const resetSession = useRepairStore((s) => s.resetSession);
   const appMode = useRepairStore((s) => s.appMode);
 
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(deviceModel);
   const [finishing, setFinishing] = useState(false);
-
-  const commitModel = () => {
-    if (draft.trim()) setDeviceModel(draft.trim());
-    setEditing(false);
-  };
 
   return (
     <header className="flex shrink-0 flex-wrap items-center gap-3 border-b-2 border-bench-border bg-bench-panel px-4 py-3 md:gap-4 md:px-6">
       <div className="flex min-w-0 items-center gap-2">
         <Cpu className="size-8 shrink-0 text-bench-accent" aria-hidden />
-        {editing ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              commitModel();
-            }}
-            className="flex items-center gap-2"
-          >
-            <input
-              autoFocus
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitModel}
-              aria-label="Device model"
-              className="h-12 w-56 rounded-lg border-2 border-bench-accent bg-bench-bg px-3 text-xl font-bold outline-none md:w-72"
-            />
-          </form>
-        ) : (
-          <button
-            onClick={() => {
-              setDraft(deviceModel);
-              setEditing(true);
-            }}
-            className="min-w-0 truncate rounded-lg px-2 py-1 text-left text-2xl font-bold tracking-tight hover:bg-bench-raised"
-            title="Tap to change device"
-          >
-            {deviceModel}
-          </button>
-        )}
+        <DevicePicker />
         <BoardRevisionPicker />
       </div>
 
       {appMode === "repair" ? (
         <div className="order-last flex min-w-0 basis-full items-center gap-3 md:order-none md:flex-1 md:basis-auto">
+          <ProcedurePicker />
           <span className="shrink-0 rounded-md bg-bench-accent px-3 py-1 font-mono text-lg font-black text-black">
             STEP {stepIndex + 1}/{steps.length}
           </span>
@@ -114,6 +79,7 @@ export function SessionHeader() {
 
 function BoardRevisionPicker() {
   const deviceModel = useRepairStore((s) => s.deviceModel);
+  const device = useRepairStore(selectDevice);
   const boardRevision = useRepairStore((s) => s.boardRevision);
   const setBoardRevision = useRepairStore((s) => s.setBoardRevision);
   const [editing, setEditing] = useState(false);
@@ -123,7 +89,10 @@ function BoardRevisionPicker() {
   const start = () => {
     setDraft(boardRevision);
     setEditing(true);
-    api.listBoards(deviceModel).then(setKnown).catch(() => setKnown([]));
+    api
+      .listBoards(deviceModel)
+      .then((seen) => setKnown([...new Set([...device.revisions, ...seen])].sort()))
+      .catch(() => setKnown(device.revisions));
   };
   const commit = () => {
     setBoardRevision(draft);

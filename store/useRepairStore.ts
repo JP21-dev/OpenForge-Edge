@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { AppMode, ReferenceValue } from "@/lib/api";
+import { CUSTOM_ID, DEVICES, getDevice, getProcedure, type ProcedureStep } from "@/lib/devices";
 
 export type ChatRole = "technician" | "copilot" | "system";
 
@@ -23,10 +24,7 @@ export interface CopilotSource {
 
 export type StepStatus = "pending" | "active" | "done" | "failed";
 
-export interface DiagnosticStep {
-  id: string;
-  title: string;
-  detail?: string;
+export interface DiagnosticStep extends ProcedureStep {
   status: StepStatus;
 }
 
@@ -65,15 +63,6 @@ export function readingStatus(r: MeterReading): ReadingStatus {
   return r.value >= r.expected.min && r.value <= r.expected.max ? "ok" : "fault";
 }
 
-export interface ScrewSpec {
-  id: string;
-  position: string;
-  length: string;
-  head: string;
-  count: number;
-  removed: boolean;
-}
-
 export type HudTab = "meter" | "reference" | "schematics" | "screws" | "history";
 
 export interface ViewerTarget {
@@ -96,21 +85,26 @@ export function findReference(refs: ReferenceValue[], testPoint: string, mode: M
   return refs.find((r) => r.mode === mode && normalizePoint(r.test_point) === key);
 }
 
-interface RepairState {
+interface DeviceSession {
   sessionId: string;
   deviceModel: string;
   boardRevision: string;
+  procedureId: string;
   activeSchematic: Schematic | null;
   diagnosticSteps: DiagnosticStep[];
   currentStepIndex: number;
-
   messages: ChatMessage[];
+  readings: MeterReading[];
+  removedScrews: string[];
+}
+
+interface RepairState extends DeviceSession {
+  deviceId: string;
+  savedSessions: Record<string, DeviceSession>;
   isCopilotThinking: boolean;
 
   hudOpen: boolean;
   hudTab: HudTab;
-  readings: MeterReading[];
-  screws: ScrewSpec[];
 
   appMode: AppMode;
   modeLoading: string | null;
@@ -118,10 +112,11 @@ interface RepairState {
   references: ReferenceValue[];
   referenceDraft: ReferenceDraft | null;
 
+  switchDevice: (deviceId: string, customName?: string) => void;
   setDeviceModel: (model: string) => void;
   setBoardRevision: (rev: string) => void;
+  setProcedure: (procedureId: string) => void;
   setActiveSchematic: (schematic: Schematic | null) => void;
-  setDiagnosticSteps: (steps: Omit<DiagnosticStep, "status">[]) => void;
   completeCurrentStep: (outcome?: "done" | "failed") => void;
   goToStep: (index: number) => void;
 
@@ -133,7 +128,8 @@ interface RepairState {
   setHudTab: (tab: HudTab) => void;
   addReading: (reading: Omit<MeterReading, "id" | "takenAt">) => void;
   removeReading: (id: string) => void;
-  toggleScrewRemoved: (id: string) => void;
+  toggleScrew: (key: string) => void;
+  setScrews: (keys: string[], removed: boolean) => void;
 
   setAppMode: (mode: AppMode, loading?: string | null) => void;
   openViewer: (schematicId: string, page?: number) => void;
@@ -150,55 +146,61 @@ const uid = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
-const PS5_STEPS: DiagnosticStep[] = [
-  { id: "s1", title: "Visual inspection", detail: "HDMI port, burnt parts, liquid metal outside the APU barrier.", status: "active" },
-  { id: "s2", title: "Confirm 12 V from the power supply", status: "pending" },
-  { id: "s3", title: "Check 5 V and southbridge voltages", status: "pending" },
-  { id: "s4", title: "Check fuses and shorts to ground", status: "pending" },
-  { id: "s5", title: "Read UART error codes", status: "pending" },
-];
+function stepsFor(deviceId: string, procedureId: string): DiagnosticStep[] {
+  return getProcedure(getDevice(deviceId), procedureId).steps.map((s, i) => ({
+    ...s,
+    status: i === 0 ? "active" : "pending",
+  }));
+}
 
-const PS5_SCREWS: ScrewSpec[] = [
-  { id: "sc1", position: "Stand", length: "26.5 mm", head: "Coin / flathead", count: 1, removed: false },
-  { id: "sc2", position: "Fan shroud", length: "23.3 mm", head: "TR9", count: 2, removed: false },
-  { id: "sc3", position: "Fan shroud", length: "11.4 mm", head: "TR9", count: 1, removed: false },
-  { id: "sc4", position: "Fan shroud", length: "31 mm", head: "TR9", count: 1, removed: false },
-  { id: "sc5", position: "SSD cover", length: "17 mm", head: "Phillips", count: 1, removed: false },
-  { id: "sc6", position: "Case", length: "18.6 mm", head: "TR8", count: 6, removed: false },
-  { id: "sc7", position: "Case", length: "23.3 mm", head: "TR8", count: 2, removed: false },
-  { id: "sc8", position: "Case", length: "43.2 mm", head: "TR8", count: 2, removed: false },
-  { id: "sc9", position: "Case", length: "7.3 mm", head: "TR8", count: 1, removed: false },
-  { id: "sc10", position: "Top shield plate", length: "7.3 mm", head: "TR8", count: 41, removed: false },
-  { id: "sc11", position: "Top shield plate", length: "43.2 mm", head: "TR8", count: 1, removed: false },
-  { id: "sc12", position: "Main board (SSD)", length: "11 mm", head: "Phillips", count: 1, removed: false },
-  { id: "sc13", position: "APU tension bracket", length: "11.8 mm", head: "Phillips", count: 2, removed: false },
-  { id: "sc14", position: "Main board", length: "7.3 mm", head: "TR8", count: 2, removed: false },
-];
+function newSession(deviceId: string, deviceModel?: string, procedureId?: string): DeviceSession {
+  const device = getDevice(deviceId);
+  const procedure = getProcedure(device, procedureId ?? "");
+  return {
+    sessionId: uid(),
+    deviceModel: deviceModel ?? device.name,
+    boardRevision: "",
+    procedureId: procedure.id,
+    activeSchematic: null,
+    diagnosticSteps: stepsFor(deviceId, procedure.id),
+    currentStepIndex: 0,
+    messages: [
+      {
+        id: "welcome",
+        role: "system",
+        content: `OpenForge Edge is running locally for ${deviceModel ?? device.name}. No data leaves this bench.`,
+        createdAt: 0,
+      },
+    ],
+    readings: [],
+    removedScrews: [],
+  };
+}
 
-const initialSession = () => ({
-  sessionId: uid(),
-  deviceModel: "PlayStation 5",
-  boardRevision: "",
-  activeSchematic: null as Schematic | null,
-  diagnosticSteps: PS5_STEPS,
-  currentStepIndex: 0,
-  messages: [
-    {
-      id: "welcome",
-      role: "system" as const,
-      content: "OpenForge Edge is running locally. No data leaves this bench.",
-      createdAt: 0,
-    },
-  ],
-  isCopilotThinking: false,
-  readings: [] as MeterReading[],
-  screws: PS5_SCREWS,
-});
+function snapshot(state: RepairState): DeviceSession {
+  return {
+    sessionId: state.sessionId,
+    deviceModel: state.deviceModel,
+    boardRevision: state.boardRevision,
+    procedureId: state.procedureId,
+    activeSchematic: state.activeSchematic,
+    diagnosticSteps: state.diagnosticSteps,
+    currentStepIndex: state.currentStepIndex,
+    messages: state.messages,
+    readings: state.readings,
+    removedScrews: state.removedScrews,
+  };
+}
+
+const DEFAULT_DEVICE = DEVICES[0].id;
 
 export const useRepairStore = create<RepairState>()(
   persist(
     (set, get) => ({
-      ...initialSession(),
+      deviceId: DEFAULT_DEVICE,
+      ...newSession(DEFAULT_DEVICE),
+      savedSessions: {},
+      isCopilotThinking: false,
       hudOpen: true,
       hudTab: "meter",
       appMode: "repair",
@@ -207,15 +209,26 @@ export const useRepairStore = create<RepairState>()(
       references: [],
       referenceDraft: null,
 
+      switchDevice: (deviceId, customName) => {
+        const state = get();
+        const key = deviceId === CUSTOM_ID ? `${CUSTOM_ID}:${(customName ?? "").toLowerCase()}` : deviceId;
+        const currentKey =
+          state.deviceId === CUSTOM_ID ? `${CUSTOM_ID}:${state.deviceModel.toLowerCase()}` : state.deviceId;
+        if (key === currentKey) return;
+        const saved = { ...state.savedSessions, [currentKey]: snapshot(state) };
+        const restored = saved[key] ?? newSession(deviceId, deviceId === CUSTOM_ID ? customName : undefined);
+        set({ deviceId, ...restored, savedSessions: saved, viewer: null, referenceDraft: null });
+      },
       setDeviceModel: (deviceModel) => set({ deviceModel }),
       setBoardRevision: (boardRevision) => set({ boardRevision: boardRevision.trim().toUpperCase() }),
-      setActiveSchematic: (activeSchematic) => set({ activeSchematic }),
-
-      setDiagnosticSteps: (steps) =>
-        set({
-          diagnosticSteps: steps.map((s, i) => ({ ...s, status: i === 0 ? "active" : "pending" })),
+      setProcedure: (procedureId) =>
+        set((state) => ({
+          procedureId,
+          diagnosticSteps: stepsFor(state.deviceId, procedureId),
           currentStepIndex: 0,
-        }),
+          removedScrews: [],
+        })),
+      setActiveSchematic: (activeSchematic) => set({ activeSchematic }),
 
       completeCurrentStep: (outcome = "done") => {
         const { diagnosticSteps, currentStepIndex } = get();
@@ -256,10 +269,17 @@ export const useRepairStore = create<RepairState>()(
           readings: [{ ...reading, id: uid(), takenAt: Date.now() }, ...state.readings],
         })),
       removeReading: (id) => set((state) => ({ readings: state.readings.filter((r) => r.id !== id) })),
-      toggleScrewRemoved: (id) =>
+      toggleScrew: (key) =>
         set((state) => ({
-          screws: state.screws.map((s) => (s.id === id ? { ...s, removed: !s.removed } : s)),
+          removedScrews: state.removedScrews.includes(key)
+            ? state.removedScrews.filter((k) => k !== key)
+            : [...state.removedScrews, key],
         })),
+      setScrews: (keys, removed) =>
+        set((state) => {
+          const rest = state.removedScrews.filter((k) => !keys.includes(k));
+          return { removedScrews: removed ? [...rest, ...keys] : rest };
+        }),
 
       setAppMode: (appMode, modeLoading = null) => set({ appMode, modeLoading }),
       openViewer: (schematicId, page = 1) => set({ viewer: { schematicId, page } }),
@@ -268,10 +288,11 @@ export const useRepairStore = create<RepairState>()(
       setReferences: (references) => set({ references }),
       setReferenceDraft: (referenceDraft) => set({ referenceDraft }),
 
-      resetSession: () => set((state) => ({ ...initialSession(), deviceModel: state.deviceModel })),
+      resetSession: () =>
+        set((state) => newSession(state.deviceId, state.deviceModel, state.procedureId)),
     }),
     {
-      name: "openforge-repair-session-v2",
+      name: "openforge-repair-session-v3",
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
       partialize: ({
@@ -288,3 +309,5 @@ export const useRepairStore = create<RepairState>()(
 );
 
 export const selectCurrentStep = (s: RepairState) => s.diagnosticSteps[s.currentStepIndex];
+export const selectDevice = (s: RepairState) => getDevice(s.deviceId);
+export const selectProcedure = (s: RepairState) => getProcedure(getDevice(s.deviceId), s.procedureId);

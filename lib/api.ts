@@ -1,6 +1,6 @@
 import type { MeterMode } from "@/store/useRepairStore";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export type AppMode = "repair" | "ingest";
 
@@ -208,7 +208,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_URL}${path}`, init);
   } catch (err) {
-    throw new ApiError(`Backend unreachable at ${API_URL} (${(err as Error).message})`);
+    throw new ApiError(`Backend unreachable (${(err as Error).message})`);
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

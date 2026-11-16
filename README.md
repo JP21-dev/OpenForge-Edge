@@ -243,7 +243,7 @@ The first build takes several minutes (the backend installs ChromaDB and LangCha
 | ChromaDB | http://localhost:8001 | Vector store |
 | MongoDB | `mongodb://localhost:27017` | Credentials from `.env` |
 
-All ports bind to `127.0.0.1`, so the databases are never exposed to the shop network.
+All ports bind to `127.0.0.1`, so the databases are never exposed to the shop network. The browser only talks to the Bench UI: requests to `/api` are forwarded by the frontend to the backend over Docker's internal network. To use the bench from other devices, see [Remote Access with Tailscale](#-remote-access-with-tailscale).
 
 ### 5. Load the knowledge base
 Embed everything in `data/manuals/` into ChromaDB (takes a few seconds for the bundled PS5 notes):
@@ -494,6 +494,26 @@ To back up automatically, add a daily Windows Task Scheduler task that runs the 
 
 ---
 
+## 🌐 Remote Access with Tailscale
+
+To open the Bench UI from your phone, another laptop, or a trusted colleague's device without putting it on the public internet, use [Tailscale](https://tailscale.com). It creates a private, encrypted network between devices you approve; nothing is exposed to anyone else, and no router ports are opened.
+
+1. Install Tailscale on the bench PC and sign in.
+2. Publish the Bench UI to your private network, with an HTTPS certificate:
+   ```bash
+   tailscale serve --bg 3000
+   ```
+3. Run `tailscale serve status` to see the address, e.g. `https://bench-pc.your-tailnet.ts.net`.
+4. Install Tailscale on your other devices and sign in with the same account. To give someone else access, invite them from the Tailscale admin console, or share just the bench PC with them; they sign in with their own account.
+
+Notes:
+*   Only the Bench UI is shared; the backend, databases and model server stay on `127.0.0.1`.
+*   Anyone you give access to has full use of the bench, including deleting data, so only invite people you trust.
+*   The bench PC must be on and awake with Docker running. One GPU serves everyone, so answers slow down with several people asking at once.
+*   To stop sharing: `tailscale serve reset`.
+
+---
+
 ## ✈️ Running Fully Offline
 
 Everything runs locally once the models and Docker images are downloaded. Before taking the bench offline:
@@ -533,7 +553,7 @@ npm install
 ```bash
 npm run dev
 ```
-Open http://localhost:3000. The frontend calls `http://localhost:8000` unless `NEXT_PUBLIC_API_URL` is set.
+Open http://localhost:3000. `npm run dev` forwards `/api` to `http://localhost:8000`; set `BACKEND_URL` to use another backend.
 
 ---
 
@@ -545,7 +565,7 @@ All settings live in `.env` (read by Docker Compose) or as environment variables
 |---|---|---|
 | `FRONTEND_PORT` / `BACKEND_PORT` | `3000` / `8000` | Host ports for the UI and API |
 | `CHROMA_HOST_PORT` / `MONGO_HOST_PORT` | `8001` / `27017` | Host ports for the databases |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend URL used by the browser. Built into the frontend, so rebuild after changing it |
+| `NEXT_PUBLIC_API_URL` | *(unset)* | Leave unset so the browser calls `/api` on the Bench UI's own address. Set it only to point browsers straight at a different backend; built into the frontend, so rebuild after changing it |
 | `CORS_ORIGINS` | `http://localhost:3000,…` | Origins allowed to call the API |
 | `LLM_PROVIDER` | `ollama` | `lemonade`, `ollama`, or `openai` (any other OpenAI-compatible server) |
 | `LLM_BASE_URL` | `http://host.docker.internal:11434` | LLM server address, as seen from the backend container. Lemonade: `http://host.docker.internal:13305/api/v1` |
@@ -573,7 +593,7 @@ All settings live in `.env` (read by Docker Compose) or as environment variables
 | `CHROMA_VERSION` / `CHROMA_COLLECTION` | `1.5.9` / `repair_manuals` | ChromaDB image tag and collection name |
 | `MONGO_VERSION`, `MONGO_ROOT_USER`, `MONGO_ROOT_PASSWORD`, `MONGO_DB` | `8.0`, `openforge`, `change-me`, `openforge` | MongoDB image and credentials |
 
-After changing backend settings, restart it with `docker compose up -d backend`. After changing `NEXT_PUBLIC_API_URL`, rebuild the frontend with `docker compose up -d --build frontend`.
+After changing backend settings, restart it with `docker compose up -d backend`. After changing `NEXT_PUBLIC_API_URL`, rebuild the frontend with `docker compose up -d --build frontend`. If you have an older `.env` that sets `NEXT_PUBLIC_API_URL=http://localhost:8000`, remove that line and rebuild the frontend, or the Bench UI will not work from other devices.
 
 ---
 
@@ -650,7 +670,7 @@ The backend container reaches Lemonade on the host at `host.docker.internal:1330
     Set `LEMONADE_API_KEY` in Lemonade's environment, and put the same value in `LLM_API_KEY` and `EMBED_API_KEY` in `.env`.
 
 ### Older Lemonade releases
-Older Lemonade versions listen on port **8000**, which clashes with the OpenForge backend. Either upgrade Lemonade, or keep it and move the backend: set `BACKEND_PORT=8080` and `NEXT_PUBLIC_API_URL=http://localhost:8080`, and change `13305` to `8000` in `LLM_BASE_URL` and `EMBED_BASE_URL`. Then rebuild with `docker compose up -d --build`.
+Older Lemonade versions listen on port **8000**, which clashes with the OpenForge backend. Either upgrade Lemonade, or keep it and move the backend: set `BACKEND_PORT=8080`, and change `13305` to `8000` in `LLM_BASE_URL` and `EMBED_BASE_URL`. Then rebuild with `docker compose up -d --build`.
 
 ### Switching back to Ollama
 Copy `.env.example` to `.env` (or set `LLM_PROVIDER=ollama` and `EMBED_PROVIDER=ollama` with their URLs and models), then restart and re-ingest:
@@ -743,7 +763,8 @@ Agents are registered in `backend/agents/__init__.py`. Nothing in `graph.py` nee
 | Chat shows *"Backend unreachable"* | Check `docker compose ps`; the backend must be `healthy` |
 | First answer is very slow | The model is loading into RAM; later answers are faster while `LLM_KEEP_ALIVE` holds it |
 | Backend can't reach Ollama under native Docker in WSL2 | Make Ollama listen on all interfaces: set `OLLAMA_HOST=0.0.0.0` on the host and restart Ollama |
-| CORS errors in the browser console | Add the UI's origin to `CORS_ORIGINS` and restart the backend |
+| Bench UI works on the bench PC but not from another device | Remove `NEXT_PUBLIC_API_URL` from `.env` and run `docker compose up -d --build frontend` |
+| CORS errors in the browser console | Only happens when `NEXT_PUBLIC_API_URL` points at another backend: add the UI's origin to `CORS_ORIGINS` and restart the backend |
 | Port already in use | Change the matching `*_PORT` variable in `.env` |
 | `knowledge_chunks` is `0` or answers never show sources | Run `docker compose exec backend python ingest.py` |
 | Ingest fails with a model error | Pull the embedding model on the host: `ollama pull nomic-embed-text` |

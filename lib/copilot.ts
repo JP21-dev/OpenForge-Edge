@@ -114,7 +114,7 @@ export async function askCopilot(
     return result;
   } catch (err) {
     return {
-      reply: `⚠ Backend unreachable at ${API_URL} (${(err as Error).message}). Start it with: uvicorn main:app --port 8000`,
+      reply: `⚠ Backend unreachable (${(err as Error).message}). Check that the stack is running: docker compose ps`,
       sources: [],
     };
   }

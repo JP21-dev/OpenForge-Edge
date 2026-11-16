@@ -9,6 +9,10 @@
 
 OpenForge Edge is an open-source copilot for electronics repair technicians, micro-soldering shops and the Right-to-Repair community. It walks a technician through a repair step by step, reads their meter readings, searches the manuals and schematics they have loaded, suggests what to try when a step fails, and learns from every finished job. Everything runs on the bench machine: no cloud, no API keys, and customer devices, licensed schematics and repair data never leave the shop.
 
+| Copilot answer with sources and a live meter reading | When a step fails, new steps are suggested |
+|---|---|
+| ![The copilot flags an out-of-range 12 V reading and cites the manual](docs/screenshots/copilot-chat.png) | ![Step failed panel with built-in and copilot suggestions](docs/screenshots/failed-step-suggestions.png) |
+
 | Guided repairs with screw maps | Known-good capture | Schematic and guide ingest |
 |---|---|---|
 | ![Repair step with a 2D screw map](docs/screenshots/screw-map.png) | ![Capturing known-good values](docs/screenshots/known-good-capture.png) | ![Ingest mode](docs/screenshots/ingest-mode.png) |

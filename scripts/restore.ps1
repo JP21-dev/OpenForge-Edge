@@ -1,7 +1,4 @@
-# Restores a backup made by scripts\backup.ps1, replacing the current bench data.
-#
-#   powershell -ExecutionPolicy Bypass -File scripts\restore.ps1 -Backup backups\openforge-20261116-031500
-#   powershell -ExecutionPolicy Bypass -File scripts\restore.ps1 -Backup <folder> -Force   (no confirmation)
+# Usage: powershell -ExecutionPolicy Bypass -File scripts\restore.ps1 -Backup <folder> [-Force] [-SkipManuals]
 
 param(
     [Parameter(Mandatory = $true)][string]$Backup,

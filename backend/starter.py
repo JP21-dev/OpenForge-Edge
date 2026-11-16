@@ -1,7 +1,4 @@
-"""Starting test points per device, with placeholder ranges where an interface
-standard defines the value. Placeholders are marked as such everywhere, are not
-counted as real data, and are replaced by the first known-good capture or
-reference value for the same test point."""
+# Placeholders only for values an interface standard defines, never board-specific ones.
 
 import logging
 import re

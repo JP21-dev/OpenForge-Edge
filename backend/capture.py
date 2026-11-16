@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 import reference
 from config import settings
 from starter import DEFAULT_POINTS
-from db import db, now, public
+from db import db, now
 from knowledge import ANY_REV, board_rev, collection, device_slug
 
 log = logging.getLogger(__name__)

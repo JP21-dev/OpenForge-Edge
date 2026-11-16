@@ -1,7 +1,4 @@
-"""Pulls a device's public repair guides from iFixit into the local knowledge
-base. Needs internet only while pulling; the text is stored in MongoDB and
-indexed in ChromaDB, so it works offline afterwards. iFixit guides are
-CC BY-NC-SA: keep them on this bench and credit iFixit."""
+# iFixit guides are CC BY-NC-SA: keep them local and credit iFixit.
 
 import json
 import logging

@@ -1,6 +1,4 @@
-# Checks that OpenForge Edge has everything it needs locally and is not talking to the internet.
-# Run from the repo root:  powershell -ExecutionPolicy Bypass -File scripts\offline-check.ps1
-# For the real test, turn off Wi-Fi / unplug Ethernet first, then run this and ask the copilot a question.
+# Usage: powershell -ExecutionPolicy Bypass -File scripts\offline-check.ps1
 
 $ErrorActionPreference = "Continue"
 $failed = 0

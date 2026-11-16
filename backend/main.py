@@ -216,10 +216,10 @@ def _event(payload: dict) -> str:
 async def _stream_events(req: ChatRequest) -> AsyncIterator[str]:
     trace: list[str] = []
     try:
-        async for mode, data in repair_graph.astream(
+        async for kind, data in repair_graph.astream(
             _initial_state(req), stream_mode=["updates", "messages"]
         ):
-            if mode == "messages":
+            if kind == "messages":
                 chunk, meta = data
                 if "internal" in (meta.get("tags") or []):
                     continue

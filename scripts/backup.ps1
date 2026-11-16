@@ -1,10 +1,5 @@
-# Backs up everything OpenForge Edge has learned on this bench:
-#   MongoDB (reference values, captures, repairs, patterns, schematic text, photos metadata),
-#   the uploads volume (schematic page images, step photos) and data/manuals (including private files).
-# ChromaDB is not copied: it is rebuilt from these by the restore script.
-#
-#   powershell -ExecutionPolicy Bypass -File scripts\backup.ps1
-#   powershell -ExecutionPolicy Bypass -File scripts\backup.ps1 -Destination D:\bench-backups -Keep 30
+# Usage: powershell -ExecutionPolicy Bypass -File scripts\backup.ps1 [-Destination <dir>] [-Keep 14]
+# ChromaDB is not backed up; restore.ps1 rebuilds it.
 
 param(
     [string]$Destination = (Join-Path $PSScriptRoot "..\backups"),

@@ -40,7 +40,6 @@ export interface Schematic {
   id: string;
   name: string;
   boardRevision?: string;
-  src?: string;
 }
 
 export type MeterMode = "DCV" | "ACV" | "OHM" | "DIODE" | "CONT" | "AMP";
@@ -128,7 +127,6 @@ interface RepairState extends DeviceSession {
   finishPrompt: boolean;
 
   switchDevice: (deviceId: string, customName?: string) => void;
-  setDeviceModel: (model: string) => void;
   setBoardRevision: (rev: string) => void;
   setProcedure: (procedureId: string) => void;
   setActiveSchematic: (schematic: Schematic | null) => void;
@@ -242,7 +240,6 @@ export const useRepairStore = create<RepairState>()(
         const restored = saved[key] ?? newSession(deviceId, deviceId === CUSTOM_ID ? customName : undefined);
         set({ deviceId, ...restored, savedSessions: saved, viewer: null, referenceDraft: null, coverage: null });
       },
-      setDeviceModel: (deviceModel) => set({ deviceModel }),
       setBoardRevision: (boardRevision) => set({ boardRevision: boardRevision.trim().toUpperCase() }),
       setProcedure: (procedureId) =>
         set((state) => ({

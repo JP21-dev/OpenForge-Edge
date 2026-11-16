@@ -34,9 +34,16 @@ Question: {question}
 Does any excerpt, known-good reference value, or logged reading's expected range, explicitly state the requested value for exactly the same rail, pin, chip or part that the question names? A value for a different rail or part does not count. If the question asks about "this reading" or "my reading", it refers to the most recent logged reading.
 Reply with only a JSON object: {{"covered": true}} or {{"covered": false}}"""
 
-SYSTEM = """You are OpenForge Edge, an offline copilot for electronics repair technicians.
-The technician's hands are busy: answer in short, numbered, actionable steps and lead with the single next action.
-The reference excerpts are ordered by relevance. Answer the technician's exact symptom or question from the excerpt that matches it most closely, and ignore excerpts about other faults.
+SYSTEM = """You are OpenForge Edge, an offline copilot for electronics repair technicians, speaking like an experienced bench tech.
+The technician's hands are busy: answer in 3 to 8 short, numbered, actionable steps.
+Match the question:
+- "What should I do?" or a found fault: give the whole job in order: assess how bad it is, fix it, check before powering on, then test before the device goes back to the customer.
+  Never stop at the diagnosis. The last numbered step is always the final test: "Before returning it: run a demanding game or stress test for 30 to 60 minutes while watching temperatures and the fan, then check every port and function the customer uses."
+- A measurement or "what next?" question: give the next check first, then what each result means.
+- A factual question: answer it directly in one or two lines.
+When an excerpt contains a procedure for this exact job, follow its steps in order. Do not add steps from guides for a different job (for example a heatsink repaste when the problem is a noisy fan).
+Never write "excerpt", "[1]" or similar, and never paste excerpt text: the technician already sees the sources under your answer.
+The reference excerpts are ordered by relevance. Answer the technician's exact symptom or question from the excerpts that match it, and ignore excerpts about other faults.
 Only state part numbers, designators, values, screw counts or tool sizes that appear in the excerpts, the known-good reference values or the logged readings. If they do not cover the question, say it is not in the knowledge base yet instead of guessing.
 Use the logged meter readings when relevant. "This reading" means the most recent one. A reading marked OUT OF RANGE is a fault lead: name it and say what to check next. Judge a reading in or out of range only from its logged expected range, a known-good reference value, or a value stated in the excerpts. Known-good reference values were measured or confirmed by this shop and outrank excerpts. Values whose source starts with "Placeholder" are only typical values from an interface standard (USB, HDMI, battery chemistry), not measured on this board: say so when you use one.
 Excerpts labelled "Past repair" are this shop's earlier jobs on the same device: mention a matching one as a lead ("a previous board with this symptom had …"), never as proof.
@@ -103,13 +110,14 @@ def _format_references(refs: list[dict]) -> str:
     return out
 
 
-def _format_context(docs: list[dict]) -> str:
+def _format_context(docs: list[dict], numbered: bool = True) -> str:
     if not docs:
         return "(none)"
     lines = []
     for i, d in enumerate(docs, 1):
         page = f" p.{d['page']}" if d.get("page") else ""
-        lines.append(f"[{i}] {d['source']}{page}: {d['text']}")
+        label = f"[{i}] " if numbered else "- "
+        lines.append(f"{label}{d['source']}{page}: {d['text']}")
     return "\n".join(lines)
 
 
@@ -128,7 +136,7 @@ def _value_covered(question: str, context: str, readings: str, references: str) 
 def respond_node(state: AgentState) -> dict:
     session = state.get("session", {})
     question = state["messages"][-1].content
-    context = _format_context(state.get("context", []))
+    context = _format_context(state.get("context", []), numbered=False)
     readings = _format_readings(session.get("readings", []))
     references = _format_references(state.get("references", []))
 

@@ -44,6 +44,7 @@ def resolve_device(device_model: str | None, question: str | None = None) -> str
 
 
 ANY_REV = "any"
+GENERAL = "general"
 
 
 def board_rev(value: str | None) -> str:
@@ -54,7 +55,7 @@ def board_rev(value: str | None) -> str:
 def scope_filter(device: str | None, rev: str | None = None, doc_type: str | None = None) -> dict | None:
     clauses: list[dict] = [{"doc_type": doc_type}] if doc_type else []
     if device:
-        clauses.append({"device": device})
+        clauses.append({"device": {"$in": [device, GENERAL]}})
     if rev and board_rev(rev) != ANY_REV:
         clauses.append({"board_rev": {"$in": [board_rev(rev), ANY_REV]}})
     if not clauses:

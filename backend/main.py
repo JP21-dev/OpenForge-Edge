@@ -14,6 +14,7 @@ import knowledge
 import mode
 import reference
 import schematics
+import suggest
 from config import settings
 from graph import repair_graph
 
@@ -31,6 +32,7 @@ app = FastAPI(title="OpenForge Edge", version="0.2.0", lifespan=lifespan)
 app.include_router(schematics.router)
 app.include_router(reference.router)
 app.include_router(history.router)
+app.include_router(suggest.router)
 
 app.add_middleware(
     CORSMiddleware,

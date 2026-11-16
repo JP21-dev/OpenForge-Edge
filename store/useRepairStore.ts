@@ -1,7 +1,15 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { AppMode, ReferenceValue } from "@/lib/api";
-import { CUSTOM_ID, DEVICES, getDevice, getProcedure, type ProcedureStep } from "@/lib/devices";
+import {
+  CUSTOM_ID,
+  DEVICES,
+  getDevice,
+  getProcedure,
+  stepDefinition,
+  type ProcedureStep,
+  type StepSuggestion,
+} from "@/lib/devices";
 
 export type ChatRole = "technician" | "copilot" | "system";
 
@@ -118,6 +126,7 @@ interface RepairState extends DeviceSession {
   setProcedure: (procedureId: string) => void;
   setActiveSchematic: (schematic: Schematic | null) => void;
   completeCurrentStep: (outcome?: "done" | "failed") => void;
+  failCurrentStep: (note: string, added: StepSuggestion[]) => void;
   goToStep: (index: number) => void;
 
   addMessage: (role: ChatRole, content: string, sources?: CopilotSource[]) => ChatMessage;
@@ -243,6 +252,30 @@ export const useRepairStore = create<RepairState>()(
         });
       },
 
+      failCurrentStep: (note, added) => {
+        const { diagnosticSteps, currentStepIndex, messages } = get();
+        const failed = diagnosticSteps[currentStepIndex];
+        if (!failed) return;
+        const inserted: DiagnosticStep[] = added.map((s, i) => ({
+          id: `added-${uid()}`,
+          title: s.title,
+          detail: s.detail,
+          view: failed.view,
+          added: true,
+          status: i === 0 ? "active" : "pending",
+        }));
+        const steps = diagnosticSteps.map((s, i) => (i === currentStepIndex ? { ...s, status: "failed" as const } : s));
+        steps.splice(currentStepIndex + 1, 0, ...inserted);
+        const next = Math.min(currentStepIndex + 1, steps.length - 1);
+        if (!inserted.length && next !== currentStepIndex) steps[next] = { ...steps[next], status: "active" };
+
+        const lines = [`Step failed: ${failed.title}${note.trim() ? ` (${note.trim()})` : ""}.`];
+        if (inserted.length) lines.push(`Added ${inserted.length} step${inserted.length === 1 ? "" : "s"}: ${inserted.map((s) => s.title).join("; ")}.`);
+        const message: ChatMessage = { id: uid(), role: "system", content: lines.join(" "), createdAt: Date.now() };
+
+        set({ diagnosticSteps: steps, currentStepIndex: next, messages: [...messages, message] });
+      },
+
       goToStep: (index) =>
         set((state) => ({
           currentStepIndex: index,
@@ -308,6 +341,20 @@ export const useRepairStore = create<RepairState>()(
   ),
 );
 
-export const selectCurrentStep = (s: RepairState) => s.diagnosticSteps[s.currentStepIndex];
+const resolved = new WeakMap<DiagnosticStep, DiagnosticStep>();
+
+export const resolveStep = (s: Pick<RepairState, "deviceId" | "procedureId">, step: DiagnosticStep) => {
+  let out = resolved.get(step);
+  if (!out) {
+    out = stepDefinition(s.deviceId, s.procedureId, step);
+    resolved.set(step, out);
+  }
+  return out;
+};
+
+export const selectCurrentStep = (s: RepairState) => {
+  const step = s.diagnosticSteps[s.currentStepIndex];
+  return step ? resolveStep(s, step) : undefined;
+};
 export const selectDevice = (s: RepairState) => getDevice(s.deviceId);
 export const selectProcedure = (s: RepairState) => getProcedure(getDevice(s.deviceId), s.procedureId);

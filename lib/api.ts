@@ -102,6 +102,22 @@ export interface RepairInput {
   message_count: number;
 }
 
+export interface SuggestedStep {
+  title: string;
+  detail: string;
+  why: string;
+}
+
+export interface SuggestInput {
+  device_model: string;
+  board_revision?: string;
+  procedure: string;
+  failed_step: { title: string; detail: string };
+  note: string;
+  completed_steps: string[];
+  readings: RepairInput["readings"];
+}
+
 export class ApiError extends Error {}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -153,6 +169,9 @@ export const api = {
   addReference: (body: ReferenceInput) => request<ReferenceValue>("/api/reference", json("POST", body)),
   deleteReference: (id: string) => request<{ deleted: string }>(`/api/reference/${id}`, { method: "DELETE" }),
   listBoards: (deviceModel: string) => request<string[]>(`/api/boards${query({ device_model: deviceModel })}`),
+
+  suggestSteps: (body: SuggestInput, signal?: AbortSignal) =>
+    request<{ steps: SuggestedStep[]; sources: { source: string }[] }>("/api/steps/suggest", { ...json("POST", body), signal }),
 
   saveRepair: (body: RepairInput) => request<RepairRecord>("/api/repairs", json("POST", body)),
   listRepairs: (deviceModel?: string) => request<RepairRecord[]>(`/api/repairs${query({ device_model: deviceModel })}`),

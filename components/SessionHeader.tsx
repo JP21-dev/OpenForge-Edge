@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { DevicePicker, ProcedurePicker } from "@/components/DevicePicker";
 import { ModeToggle } from "@/components/ModeToggle";
 import { FinishRepairDialog } from "@/components/FinishRepairDialog";
+import { FailStepDialog } from "@/components/FailStepDialog";
 
 export function SessionHeader() {
   const schematic = useRepairStore((s) => s.activeSchematic);
@@ -20,6 +21,7 @@ export function SessionHeader() {
   const appMode = useRepairStore((s) => s.appMode);
 
   const [finishing, setFinishing] = useState(false);
+  const [failing, setFailing] = useState(false);
 
   return (
     <header className="flex shrink-0 flex-wrap items-center gap-3 border-b-2 border-bench-border bg-bench-panel px-4 py-3 md:gap-4 md:px-6">
@@ -40,7 +42,7 @@ export function SessionHeader() {
             <IconButton label="Mark step passed" onClick={() => completeCurrentStep("done")} tone="ok">
               <Check className="size-7" />
             </IconButton>
-            <IconButton label="Mark step failed" onClick={() => completeCurrentStep("failed")} tone="fault">
+            <IconButton label="Step failed: suggest next steps" onClick={() => setFailing(true)} tone="fault">
               <X className="size-7" />
             </IconButton>
           </div>
@@ -73,6 +75,7 @@ export function SessionHeader() {
       </div>
 
       {finishing && <FinishRepairDialog onClose={() => setFinishing(false)} />}
+      {failing && <FailStepDialog onClose={() => setFailing(false)} />}
     </header>
   );
 }

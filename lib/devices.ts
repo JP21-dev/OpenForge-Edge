@@ -22,13 +22,38 @@ export interface DeviceView {
   shapes: Shape[];
 }
 
+export interface StepSuggestion {
+  title: string;
+  detail?: string;
+}
+
 export interface ProcedureStep {
   id: string;
   title: string;
   detail?: string;
   view?: string;
   screws?: string[];
+  onFail?: StepSuggestion[];
+  added?: boolean;
 }
+
+export const TEARDOWN_FAIL: StepSuggestion[] = [
+  { title: "Free a stripped or stuck screw", detail: "Use a fresh bit and press down hard while turning. A rubber band between bit and screw helps; a screw extractor is the last resort." },
+  { title: "Look for a hidden screw or clip", detail: "Check under stickers and labels and recheck this stage's screw list before applying force." },
+  { title: "Inspect for damage before continuing", detail: "Check for cracked clips, torn ribbon cables or bent connectors from the stuck part." },
+];
+
+const INSPECT_FAIL: StepSuggestion[] = [
+  { title: "Photograph and note the damage", detail: "Record burnt parts, corrosion or residue and where they are before cleaning anything." },
+  { title: "Clean corrosion and residue", detail: "Isopropyl alcohol and a soft brush, then dry fully. Re-inspect under magnification." },
+  { title: "Check damaged areas for shorts to ground", detail: "Diode or resistance mode across nearby capacitors and the rail they sit on." },
+];
+
+const SHORT_FAIL: StepSuggestion[] = [
+  { title: "Locate the shorted component", detail: "Thermal camera, freeze spray or isopropyl while injecting a low, current-limited voltage into the shorted rail." },
+  { title: "Lift suspect capacitors one at a time", detail: "Re-measure the rail after each one until the short clears." },
+  { title: "Replace any open fuse after clearing the short", detail: "Match the original rating; a new fuse on a live short will blow again." },
+];
 
 export interface Procedure {
   id: string;
@@ -173,18 +198,66 @@ PS5.procedures = [
     summary: "Open to the main board, then work through the power checks.",
     steps: [
       ...PS5_TO_SHIELD,
-      { id: "inspect", title: "Visual inspection", detail: "HDMI port, burnt parts, liquid metal outside the APU barrier.", view: "board" },
-      { id: "12v", title: "Confirm 12 V from the power supply", view: "board" },
-      { id: "5v", title: "Check 5 V and southbridge voltages", view: "board" },
-      { id: "fuses", title: "Check fuses and shorts to ground", view: "board" },
-      { id: "uart", title: "Read UART error codes", view: "board" },
+      {
+        id: "inspect",
+        title: "Visual inspection",
+        detail: "HDMI port, burnt parts, liquid metal outside the APU barrier.",
+        view: "board",
+        onFail: [
+          ...INSPECT_FAIL,
+          { title: "Check for liquid metal leakage", detail: "Silver residue outside the APU barrier can short capacitors near the 12 V area. Clean it off completely before powering on." },
+        ],
+      },
+      {
+        id: "12v",
+        title: "Confirm 12 V from the power supply",
+        view: "board",
+        onFail: [
+          { title: "Check the 12 V rail for a short to ground", detail: "A board-side short can stop the supply from starting." },
+          { title: "Test with a known-good power supply", detail: "If 12 V appears with another supply and the board has no short, the original PSU has failed." },
+          { title: "Inspect around the 12 V area", detail: "Look for shorted or burnt capacitors and liquid metal residue." },
+        ],
+      },
+      {
+        id: "5v",
+        title: "Check 5 V and southbridge voltages",
+        view: "board",
+        onFail: [
+          { title: "Check the missing rail for a short to ground", detail: "Measure resistance or diode mode on the rail with power off." },
+          { title: "Check the regulator's input and enable", detail: "If its input is present but the output is missing, suspect the regulator itself." },
+          { title: "Check fuses for continuity", detail: "Fuse designators differ between revisions; confirm on your boardview." },
+        ],
+      },
+      { id: "fuses", title: "Check fuses and shorts to ground", view: "board", onFail: SHORT_FAIL },
+      {
+        id: "uart",
+        title: "Read UART error codes",
+        view: "board",
+        onFail: [
+          { title: "Ask the copilot about the error code", detail: "Paste the code into the chat so it can search the manuals and past repairs." },
+          { title: "Dump the NOR flash", detail: "Read the SPI flash next to the southbridge to recover the error log." },
+          { title: "Check the UART connection", detail: "Confirm ground, TX/RX wiring and the adapter's voltage level before trusting an empty log." },
+        ],
+      },
     ],
   },
   {
     id: "fan-clean",
     title: "Fan cleaning or replacement",
     summary: "Only the stand, faceplate and fan shroud come off.",
-    steps: [...PS5_OPEN, { id: "clean", title: "Clean the fan and dust ports", detail: "Vacuum the two dust ports beside the fan.", view: "side" }],
+    steps: [
+      ...PS5_OPEN,
+      {
+        id: "clean",
+        title: "Clean the fan and dust ports",
+        detail: "Vacuum the two dust ports beside the fan.",
+        view: "side",
+        onFail: [
+          { title: "Spin the fan by hand", detail: "Rough or noisy bearings mean the fan should be replaced." },
+          { title: "Check the fan cable and connector", detail: "Look for pinched wires or a bent connector pin." },
+        ],
+      },
+    ],
   },
   {
     id: "repaste",
@@ -295,17 +368,48 @@ XSX.procedures = [
     summary: "Open to the motherboard, then work through the power checks.",
     steps: [
       ...XSX_TO_BOARD,
-      { id: "inspect", title: "Visual inspection", detail: "Liquid damage, burnt parts, the HDMI port and the area around the HDMI redriver.", view: "board" },
-      { id: "12v", title: "Confirm 12 V from the power supply", detail: "Measure at the motherboard power connector. Do not open the PSU: it carries mains voltage.", view: "board" },
-      { id: "shorts", title: "Check the 12 V input for a short to ground", view: "board" },
-      { id: "rails", title: "Check the regulator outputs around the SoC", view: "board" },
+      { id: "inspect", title: "Visual inspection", detail: "Liquid damage, burnt parts, the HDMI port and the area around the HDMI redriver.", view: "board", onFail: INSPECT_FAIL },
+      {
+        id: "12v",
+        title: "Confirm 12 V from the power supply",
+        detail: "Measure at the motherboard power connector. Do not open the PSU: it carries mains voltage.",
+        view: "board",
+        onFail: [
+          { title: "Check the power cord and outlet", detail: "Try a known-good cord and outlet first." },
+          { title: "Reseat the 10-pin power connector", detail: "Squeeze the lock, lift straight up, check the pins, then press it fully home." },
+          { title: "Check the 12 V input for a short to ground", detail: "A board-side short can stop the supply from starting." },
+          { title: "Test with a known-good power supply", detail: "Swap the PSU rather than opening it." },
+        ],
+      },
+      { id: "shorts", title: "Check the 12 V input for a short to ground", view: "board", onFail: SHORT_FAIL },
+      {
+        id: "rails",
+        title: "Check the regulator outputs around the SoC",
+        view: "board",
+        onFail: [
+          { title: "Check the regulator's input and enable", detail: "If its input is present but the output is missing, suspect the regulator itself." },
+          { title: "Check the missing rail for a short to ground", detail: "Measure with power off before replacing the regulator." },
+          { title: "Compare against a known-good board", detail: "Save trusted values in the Reference tab so they are checked automatically." },
+        ],
+      },
     ],
   },
   {
     id: "fan-clean",
     title: "Fan cleaning or replacement",
     summary: "Only the back panel and fan come off.",
-    steps: [...XSX_OPEN, { id: "clean", title: "Clean the fan and vents", view: "interior" }],
+    steps: [
+      ...XSX_OPEN,
+      {
+        id: "clean",
+        title: "Clean the fan and vents",
+        view: "interior",
+        onFail: [
+          { title: "Spin the fan by hand", detail: "Rough or noisy bearings mean the fan should be replaced." },
+          { title: "Check the fan cable and connector", detail: "Look for pinched wires or a bent connector pin." },
+        ],
+      },
+    ],
   },
   {
     id: "optical",
@@ -339,9 +443,9 @@ const CUSTOM: DeviceProfile = {
       title: "General diagnosis",
       summary: "No device profile yet: generic checks only.",
       steps: [
-        { id: "inspect", title: "Visual inspection" },
+        { id: "inspect", title: "Visual inspection", onFail: INSPECT_FAIL },
         { id: "input", title: "Confirm input power" },
-        { id: "shorts", title: "Check main rails for shorts to ground" },
+        { id: "shorts", title: "Check main rails for shorts to ground", onFail: SHORT_FAIL },
         { id: "rails", title: "Measure regulator outputs" },
       ],
     },
@@ -359,3 +463,15 @@ export function getProcedure(device: DeviceProfile, procedureId: string): Proced
 }
 
 export const screwKey = (groupId: string, index: number) => `${groupId}:${index}`;
+
+export function stepDefinition<T extends ProcedureStep>(deviceId: string, procedureId: string, step: T): T {
+  if (step.added) return step;
+  const def = getProcedure(getDevice(deviceId), procedureId).steps.find((s) => s.id === step.id);
+  return def ? { ...step, ...def } : step;
+}
+
+export function failSuggestions(step: ProcedureStep): StepSuggestion[] {
+  if (step.onFail?.length) return step.onFail;
+  if (step.screws?.length) return TEARDOWN_FAIL;
+  return [];
+}

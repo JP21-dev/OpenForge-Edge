@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check, CheckCircle2, ChevronDown, CircleDashed, ExternalLink, Info } from "lucide-react";
-import { selectCurrentStep, selectDevice, selectProcedure, useRepairStore } from "@/store/useRepairStore";
+import { Check, CheckCircle2, ChevronDown, CircleDashed, ExternalLink, Info, X } from "lucide-react";
+import { resolveStep, selectCurrentStep, selectDevice, selectProcedure, useRepairStore } from "@/store/useRepairStore";
 import { VIEW_BOX, screwKey, type DeviceView, type ScrewGroup, type Shape } from "@/lib/devices";
 
 const COLORS = ["#f5a524", "#22d3ee", "#e879f9", "#a3e635", "#fb7185", "#818cf8", "#facc15", "#34d399"];
@@ -19,7 +19,10 @@ export function ScrewMapPanel() {
   const procedure = useRepairStore(selectProcedure);
   const step = useRepairStore(selectCurrentStep);
   const stepIndex = useRepairStore((s) => s.currentStepIndex);
-  const steps = useRepairStore((s) => s.diagnosticSteps);
+  const rawSteps = useRepairStore((s) => s.diagnosticSteps);
+  const deviceId = useRepairStore((s) => s.deviceId);
+  const procedureId = useRepairStore((s) => s.procedureId);
+  const steps = rawSteps.map((s) => resolveStep({ deviceId, procedureId }, s));
   const removed = useRepairStore((s) => s.removedScrews);
   const toggleScrew = useRepairStore((s) => s.toggleScrew);
   const setScrews = useRepairStore((s) => s.setScrews);
@@ -45,7 +48,10 @@ export function ScrewMapPanel() {
         <div className="font-mono text-base font-bold uppercase text-bench-accent">
           Step {stepIndex + 1}/{steps.length} · {procedure.title}
         </div>
-        <h3 className="text-2xl font-black leading-tight">{step.title}</h3>
+        <h3 className="text-2xl font-black leading-tight">
+          {step.title}
+          {step.added && <span className="ml-2 align-middle rounded bg-bench-accent/20 px-2 py-0.5 font-mono text-sm text-bench-accent">added after a failed step</span>}
+        </h3>
         {step.detail && <p className="text-lg text-bench-muted">{step.detail}</p>}
       </div>
 
@@ -143,8 +149,10 @@ export function ScrewMapPanel() {
                   >
                     <span className="w-7 font-mono font-bold">{i + 1}</span>
                     <span className="min-w-0 flex-1 truncate">{s.title}</span>
+                    {s.added && <span className="rounded bg-bench-accent/20 px-1.5 font-mono text-sm text-bench-accent">added</span>}
                     {count > 0 && <span className="font-mono text-base">{count} screws</span>}
                     {s.status === "done" && <Check className="size-5 text-bench-ok" aria-label="done" />}
+                    {s.status === "failed" && <X className="size-5 text-bench-fault" aria-label="failed" />}
                   </button>
                 </li>
               );

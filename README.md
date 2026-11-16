@@ -23,6 +23,7 @@ Built to run entirely on local edge devices, OpenForge Edge removes the reliance
 *   **Multimeter HUD & Diode Testing:** Log readings from any meter with large touch targets (test point, mode, value, optional expected range). Readings are flagged in/out of range and sent to the copilot, so you can ask "Is this reading bad?" or "What should I check next?".
 *   **Device Profiles:** PlayStation 5 and Xbox Series X built in, plus any other device by name. Switching devices keeps a separate session for each, so you can flip between benches and pick up where you left off.
 *   **Repair Procedures and 2D Screw Maps:** Choose the repair (no-power diagnosis, fan cleaning, APU repaste, optical drive, SSD access). Each step shows a 2D layout of that stage with only the screws that step removes, colour-coded by length. Tap screws as they come out; the next step unlocks when they're all out.
+*   **Failed-Step Suggestions:** When a step fails (the red ✕), the copilot suggests what to do next: built-in follow-ups for that step plus suggestions drawn from the manuals, schematics, readings and past repairs. Pick the ones you want and they are inserted into the repair.
 *   **Local RAG for Repair Manuals:** Ingest schematic PDFs, Markdown notes and JSON measurement files into ChromaDB with local `nomic-embed-text` embeddings. Answers cite the excerpts they used, and questions asking for a voltage, reading or resistance the knowledge base doesn't contain get "not in the knowledge base yet" instead of a guess.
 *   **Schematic Vision Ingest:** Upload schematic PDFs or phone photos of schematics in the Bench UI. A local vision model (`qwen3-vl:4b-instruct`) reads every page into rails, components, connectors and test points, which become searchable. Each page can be checked and corrected against the original image.
 *   **Repair / Ingest Mode Toggle:** One switch in the header swaps the GPU between the chat model (diagnosing boards) and the vision model (reading schematics), so both fit on a 6 GB card.
@@ -91,6 +92,7 @@ OpenForge Edge uses a decoupled, containerized architecture optimized for local 
 │   ├── mode.py             Repair / Ingest switch and model loading
 │   ├── reference.py        Known-good reference values
 │   ├── history.py          Repair history
+│   ├── suggest.py          Next-step suggestions after a failed step
 │   ├── db.py               MongoDB connection
 │   ├── llm.py, config.py, state.py
 │   └── requirements.txt
@@ -260,6 +262,13 @@ The HUD's **Screws** tab follows the current step:
 *   A list of the same screws with head type, length and count. Tap a marker or a row to mark screws removed.
 *   When every screw in the step is out, **All out: next step** advances the procedure. **All steps** lists the whole repair and lets you jump to any step.
 
+### When a step fails
+Press the red **✕** in the header instead of the green check. A **Step failed** panel opens with:
+*   **Suggested for this step:** built-in follow-ups written into the device profile, for example a short-to-ground check and a known-good PSU swap when 12 V is missing, or screw-extraction tips on teardown steps.
+*   **From the copilot:** up to four steps generated from the failed step, an optional note ("12 V reads 0, fan twitches once"), logged readings, reference values, the knowledge base and past repairs. Each one says which source it came from. Type a note and press **Ask** to refine them. Needs Repair mode.
+
+Tick the steps you want and press **Add steps and continue**: the failed step is marked ✕, the chosen steps are inserted right after it (tagged *added* in the step list), and a line in the chat records what failed and what was added. **Mark failed only** skips ahead without adding anything.
+
 Screw counts and lengths come from iFixit's guides, linked in the panel. The drawings are simplified and positions are approximate (iFixit's photos are not bundled, so the app stays offline): match screws by colour and length.
 
 | Device | Repairs |
@@ -268,7 +277,7 @@ Screw counts and lengths come from iFixit's guides, linked in the panel. The dra
 | Xbox Series X | No power / no video diagnosis, fan cleaning, optical drive service, internal SSD access |
 | Any other device | General diagnosis steps, no screw map |
 
-**Adding a device:** add a profile to `DEVICES` in `lib/devices.ts` (views drawn on a 100 × 160 grid, screw groups with positions, procedures whose steps list screw group ids), add its aliases to `DEVICE_ALIASES`, and put its notes in `data/manuals/<device-id>/`.
+**Adding a device:** add a profile to `DEVICES` in `lib/devices.ts` (views drawn on a 100 × 160 grid, screw groups with positions, procedures whose steps list screw group ids and optional `onFail` suggestions), add its aliases to `DEVICE_ALIASES`, and put its notes in `data/manuals/<device-id>/`.
 
 **Private files:** PDFs under `data/manuals/` and any `data/manuals/**/private/` folder are git-ignored so proprietary schematics are never pushed. Markdown and JSON files are committed; keep only content you are allowed to share in them.
 
@@ -501,6 +510,7 @@ docker compose exec backend python ingest.py --reset
 | `GET` / `POST` | `/api/reference` | List or save known-good values |
 | `DELETE` | `/api/reference/{id}` | Delete a reference value |
 | `GET` | `/api/boards?device_model=` | Board revisions seen for a device |
+| `POST` | `/api/steps/suggest` | Suggest next steps after a failed step: `device_model`, `board_revision`, `procedure`, `failed_step`, `note`, `completed_steps`, `readings` |
 | `GET` / `POST` | `/api/repairs` | List or save repair history |
 | `DELETE` | `/api/repairs/{id}` | Delete a repair record |
 
